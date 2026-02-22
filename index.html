@@ -187,6 +187,12 @@ const INITIAL_CASES = {
   collector: { id: 'collector', name: 'Коллекционер', emoji: '🎩', price: 650, color: 'from-rose-600 to-pink-800', locked: true, isNew: true, freeCount: 0 }
 };
 
+// Логика определения победителя по зоне:
+// - Каток делится на сектора от 0° до 360°
+// - angle 0° = верх (12 часов), по часовой стрелке
+// - sorted игроки по timestamp определяют порядок секторов
+// - Проверяем в каком секторе остановилась шайба
+
 const ICE_ARENA_PRIZES = [
   { id: 'bear', name: '🧸 Мишка', chance: 40, type: 'item', sellPrice: 20, emoji: '🧸' },
   { id: 'gloves', name: '🧤 Варежки', chance: 30, type: 'item', sellPrice: 50, emoji: '🧤' },
@@ -785,25 +791,35 @@ function App() {
     const players = Object.entries(data.players);
     const totalBet = players.reduce((s, [, p]) => s + p.bet, 0);
 
-    // Determine which sector the ball is in (angle from center)
+    // Вычисляем угол остановки шайбы (0° = верх (12 часов), по часовой стрелке)
     const dx = finalX - 50;
     const dy = finalY - 50;
-    let angle = Math.atan2(dy, dx) * 180 / Math.PI;
-    if (angle < 0) angle += 360;
+    // atan2(dy, dx) возвращает угол в радианах
+    // Конвертируем: 0° = верх, по часовой стрелке
+    let angle = Math.atan2(dx, dy) * 180 / Math.PI;
+    angle = (angle + 90 + 360) % 360; // Приводим к 0-360
 
-    // Match angle to player sector (sorted by timestamp = order of joining)
+    // Сортируем игроков по timestamp для определения порядка секторов
+    const sorted = players.sort((a, b) => a[1].timestamp - b[1].timestamp);
+
+    // Ищем победителя по сектору
     let currentAngle = 0;
     let winner = null;
-    const sorted = players.sort((a, b) => a[1].timestamp - b[1].timestamp);
+
     for (const [id, p] of sorted) {
-      const sector = (p.bet / totalBet) * 360;
-      if (angle >= currentAngle && angle < currentAngle + sector) {
+      const sectorSize = (p.bet / totalBet) * 360;
+      // Проверяем находится ли угол в этом секторе
+      if (angle >= currentAngle && angle < currentAngle + sectorSize) {
         winner = { id, ...p };
         break;
       }
-      currentAngle += sector;
+      currentAngle += sectorSize;
     }
-    if (!winner) winner = { id: sorted[0][0], ...sorted[0][1] };
+
+    // Если не нашли победителя (крайний случай), берём первого
+    if (!winner && sorted.length > 0) {
+      winner = { id: sorted[0][0], ...sorted[0][1] };
+    }
 
     // Pick bonus prize
     const rand = Math.random() * 100;
@@ -814,7 +830,8 @@ function App() {
       if (rand <= cum) { wonPrize = prize; break; }
     }
 
-    const winAmount = Math.floor(totalBet * 0.40);
+    // Победитель получает 65% от банка
+    const winAmount = Math.floor(totalBet * 0.65);
 
     await lobbyRef.update({
       status: 'finished',
@@ -825,7 +842,7 @@ function App() {
     });
 
     // Credit winner
-    if (winner.id === user.id) {
+    if (winner && winner.id === user.id) {
       const newBal = balance + winAmount;
       setBalance(newBal);
       await db.ref('users/' + user.id + '/balance').set(newBal);
@@ -904,15 +921,17 @@ function App() {
       const startAngle = currentAngle;
       currentAngle += sectorDeg;
 
-      // Avatar position
+      // Avatar position (0° = top, по часовой стрелке как в finishIceGame)
       const avatarDist = 28;
-      const avatarX = 50 + avatarDist * Math.cos((midAngle - 90) * Math.PI / 180);
-      const avatarY = 50 + avatarDist * Math.sin((midAngle - 90) * Math.PI / 180);
+      const radMid = (midAngle - 90) * Math.PI / 180; // Конвертируем 0°=top в math координаты
+      const avatarX = 50 + avatarDist * Math.cos(radMid);
+      const avatarY = 50 + avatarDist * Math.sin(radMid);
 
       // Percent label position
       const labelDist = 18;
-      const labelX = 50 + labelDist * Math.cos((midAngle - 90) * Math.PI / 180);
-      const labelY = 50 + labelDist * Math.sin((midAngle - 90) * Math.PI / 180);
+      const radLabel = (midAngle - 90) * Math.PI / 180;
+      const labelX = 50 + labelDist * Math.cos(radLabel);
+      const labelY = 50 + labelDist * Math.sin(radLabel);
 
       return (
         <React.Fragment key={id}>
@@ -1365,7 +1384,7 @@ function App() {
             <div className="glass rounded-xl p-4 mb-3 text-center border border-gray-500/30">
               <div className="text-4xl mb-2">😔</div>
               <div className="font-bold text-gray-300">Победил {iceLobby?.winner?.name}</div>
-              <div className="text-gray-400 text-xs mt-1 mb-3">Банк: {totalBank}⭐️ → победитель получил {Math.floor(totalBank * 0.4)}⭐️</div>
+              <div className="text-gray-400 text-xs mt-1 mb-3">Банк: {totalBank}⭐️ → победитель получил {Math.floor(totalBank * 0.65)}⭐️</div>
               <button onClick={exitLobbyNonWinner} className="w-full bg-gray-600 hover:bg-gray-500 py-2.5 rounded-xl font-bold transition text-sm">
                 Выйти из лобби
               </button>
@@ -1645,7 +1664,7 @@ function App() {
               <div className="glass rounded-xl p-5 border border-cyan-500/30">
                 <h3 className="text-xl font-bold mb-1 text-center text-cyan-300">☃️ Ледяной Каток</h3>
                 <p className="text-gray-400 mb-1 text-center text-xs">Дождитесь 2+ игроков → ставьте → жмите «Готов»</p>
-                <p className="text-cyan-400 text-center text-xs mb-3">Победитель получает 40% от банка + бонус 📦</p>
+                <p className="text-cyan-400 text-center text-xs mb-3">Победитель получает 65% от банка + бонус 📦</p>
                 <div className="grid grid-cols-5 gap-2">
                   {[1,2,3,4,5,6,7,8,9,10].map(i => (
                     <button key={i} onClick={() => joinIceLobby(i)} className="bg-cyan-700 hover:bg-cyan-600 py-2 rounded-lg text-sm font-bold transition">#{i}</button>
