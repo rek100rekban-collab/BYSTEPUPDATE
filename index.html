@@ -10,12 +10,19 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <script>
-tailwind.config = {
-  darkMode: 'class',
-  theme: {
-    extend: { colors: { primary: '#6366f1', secondary: '#8b5cf6', accent: '#f59e0b', ice: '#00d2ff' } }
+  tailwind.config = {
+    darkMode: 'class',
+    theme: {
+      extend: {
+        colors: {
+          primary: '#6366f1',
+          secondary: '#8b5cf6',
+          accent: '#f59e0b',
+          ice: '#00d2ff',
+        }
+      }
+    }
   }
-}
 </script>
 <style>
 @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
@@ -124,7 +131,7 @@ const CASE_REWARDS = {
     { id: 'stars_150', name: '150 ⭐️', displayChance: '45%', realChance: 45, type: 'stars', value: 150, emoji: '⭐️' },
     { id: 'stars_75', name: '75 ⭐️', displayChance: '40%', realChance: 40, type: 'stars', value: 75, emoji: '⭐️' },
     { id: 'trophy', name: '🏆', displayChance: '5%', realChance: 5, type: 'collectible', emoji: '🏆' },
-    { id: 'gem', name: '💎', displayChance: '5%', realChance: 5, type: 'collectible', emoji: '💎' },
+    { id: 'gem', name: '💎', displayChance: 5, realChance: 5, type: 'collectible', emoji: '💎' },
     { id: 'bday_happy', name: 'Happy B-day 💈', displayChance: '4%', realChance: 4, type: 'collectible', emoji: '💈' },
     { id: 'cigar', name: 'Snoop Cigar 🚬', displayChance: '1%', realChance: 1, type: 'collectible', emoji: '🚬' }
   ],
@@ -281,17 +288,17 @@ function App() {
   const [gameStatus, setGameStatus] = useState('waiting');
   const [ballPos, setBallPos] = useState({ x: 50, y: 50 });
   const [timerRemaining, setTimerRemaining] = useState(0);
-  // Локальное состояние игрока
+  // Local player state
   const [myBet, setMyBet] = useState(25);
   const [myBetInput, setMyBetInput] = useState(25);
   const [hasBet, setHasBet] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const [myColor, setMyColor] = useState('');
-  // Счётчики
+  // Counters
   const [presenceCount, setPresenceCount] = useState(0);
   const [bettingCount, setBettingCount] = useState(0);
   const [readyCount, setReadyCount] = useState(0);
-  // Победный экран
+  // Victory box
   const [showVictoryBox, setShowVictoryBox] = useState(false);
   const [victoryStars, setVictoryStars] = useState(0);
   const [victoryPrize, setVictoryPrize] = useState(null);
@@ -326,7 +333,6 @@ function App() {
         const snap = await db.ref('users/' + userId).once('value');
         const data = snap.val();
         if (data) {
-          // МЕРДЖИМ АКТУАЛЬНЫЕ КЕЙСЫ С ХРАНИМЫМИ
           const storedCases = data.cases || {};
           const mergedCases = { ...INITIAL_CASES };
           for (const [key, value] of Object.entries(storedCases)) {
@@ -336,7 +342,6 @@ function App() {
               mergedCases[key] = value;
             }
           }
-          // сохраняем назад в Firebase, чтобы старые аккаунты получили новые кейсы
           await db.ref('users/' + userId + '/cases').set(mergedCases);
           setUser({ id: userId, ...userData, ...data });
           setBalance(data.balance || 0);
@@ -419,17 +424,13 @@ function App() {
       setIceLobby(data);
       const status = data.status || 'waiting';
       setGameStatus(status);
-      // Presence count
       const presCount = data.presence ? Object.keys(data.presence).length : 0;
       setPresenceCount(presCount);
-      // Players (with bets)
       const players = data.players || {};
       const bCount = Object.keys(players).length;
       setBettingCount(bCount);
-      // Ready count
       const rCount = data.readyPlayers ? Object.keys(data.readyPlayers).length : 0;
       setReadyCount(rCount);
-      // Sync my bet state
       if (players[user.id]) {
         setHasBet(true);
         setMyBet(players[user.id].bet);
@@ -441,22 +442,18 @@ function App() {
           setIsReady(false);
         }
       }
-      // Ready status
       if (data.readyPlayers?.[user.id]) {
         setIsReady(true);
       } else if (status === 'open') {
         setIsReady(false);
       }
-      // Ball position
       if (data.ballPosition) setBallPos(data.ballPosition);
-      // Countdown timer
       if (data.countdownEnd && status === 'countdown') {
         const rem = Math.max(0, Math.ceil((data.countdownEnd - Date.now()) / 1000));
         setTimerRemaining(rem);
       } else {
         setTimerRemaining(0);
       }
-      // Victory screen for winner
       if (status === 'finished' && data.winner?.id === user.id) {
         if (!data.prizeClaimed?.[user.id] && !prizeClaimedLocal) {
           setVictoryStars(data.wonStars || 0);
@@ -621,7 +618,7 @@ function App() {
       setTimeout(() => triggerGameStart(lobbyRef, currentGame.lobbyId), 10000);
     }
   };
-  // Watch for new players joining during countdown
+  // New players during countdown cancel countdown
   useEffect(() => {
     if (gameStatus !== 'countdown' || !currentGame?.lobbyId) return;
     const presRef = db.ref('iceLobbies/' + currentGame.lobbyId + '/presence');
@@ -899,11 +896,13 @@ function App() {
       setBalance(newBal);
       await db.ref('users/' + user.id + '/balance').set(newBal);
     }
-    setIsSpinning(true);
-    setSelectedCase({ ...cases[caseType], id: caseType });
+    // reset animation state completely before new spin
+    setIsSpinning(false);
     setSpinResult(null);
-    setRouletteOffset(0);
     setFakeItems([]);
+    setRouletteOffset(0);
+    setSelectedCase({ ...cases[caseType], id: caseType });
+    // force re-mount of roulette for each spin
     setRouletteKey(prev => prev + 1);
     const items = CASE_REWARDS[caseType];
     const rand = Math.random() * 100;
@@ -911,14 +910,17 @@ function App() {
     for (const item of items) { cum += item.realChance; if (rand <= cum) { won = item; break; } }
     const tape = [];
     for (let i = 0; i < 80; i++) tape.push(i === 70 ? won : items[Math.floor(Math.random() * items.length)]);
+    setIsSpinning(true);
     setTimeout(() => {
       setFakeItems(tape);
+      setRouletteOffset(0);
       setTimeout(() => {
         const cw = rouletteContainerRef.current ? rouletteContainerRef.current.offsetWidth : window.innerWidth;
         const ifw = 136;
-        setRouletteOffset(-(70 * ifw + ifw / 2 - cw / 2));
-      }, 100);
-    }, 100);
+        const target = (70 * ifw + ifw / 2 - cw / 2);
+        setRouletteOffset(-target);
+      }, 50);
+    }, 50);
     setTimeout(async () => {
       setSpinResult(won);
       setIsSpinning(false);
@@ -1709,7 +1711,7 @@ function App() {
             </div>
             <div className="roulette-container mb-5">
               <div className="roulette-pointer" />
-              <div className="roulette-inner" style={{ transform: `translateX(${rouletteOffset}px)` }}>
+              <div key={rouletteKey} className="roulette-inner" style={{ transform: `translateX(${rouletteOffset}px)` }}>
                 {fakeItems.length > 0
                   ? fakeItems.map((item, i) => (
                     <div key={i} className="roulette-item">
