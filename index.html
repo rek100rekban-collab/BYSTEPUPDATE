@@ -86,7 +86,7 @@ const db = firebase.database();
 const TelegramWebApp = window.Telegram?.WebApp;
 const ADMIN_WALLET = 'UQAWqaIPFSg81l9MlgAx0HBE9o3gpJMhk1dnyryKJXhWNHIc';
 const TONCENTER_API = 'https://toncenter.com/api/v2';
-const BOT_TOKEN = '8325421899:AAHRdmMYdjJMXmAVIynDsQtpUNsSeKkaOis';
+const BOT_TOKEN = '8325421899:AAG9t3yS4WWiwasRoHb-nbr3a94S9tQfHys';
 // Случайный цвет для игрока
 const PLAYER_COLORS = [
   '#FF6B6B','#FF9F43','#FFEAA7','#55EFC4','#74B9FF',
@@ -996,6 +996,12 @@ function App() {
       setPromoSuccess('+5 кейсов «Мужык 💪»!');
       const np = [...usedPromos, code]; setUsedPromos(np); setPromoCode('');
       await db.ref(`users/${user.id}/usedPromos`).set(np);
+    } else if (code === 'PROMO') {
+      const nb = balance + 275;
+      setBalance(nb);
+      setPromoSuccess('✅ Начислено 275⭐️!');
+      const np = [...usedPromos, code]; setUsedPromos(np); setPromoCode('');
+      await db.ref(`users/${user.id}`).update({ balance: nb, usedPromos: np });
     } else { setPromoError('Неверный промокод'); }
   };
   const topUpBalance = async (stars, ton) => {
