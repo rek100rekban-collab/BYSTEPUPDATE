@@ -41,14 +41,8 @@
         .glass { background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.2); }
         .line-through { text-decoration: line-through; opacity: 0.6; color: #ef4444; text-decoration-color: #ef4444; text-decoration-thickness: 2px; }
         .fullscreen-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 100; overflow-y: auto; }
-        .ice-circle { width: 300px; height: 300px; border-radius: 50%; border: 4px solid rgba(0,210,255,0.6); position: relative; overflow: hidden; background: rgba(0, 40, 80, 0.6); box-shadow: 0 0 40px rgba(0,210,255,0.4), inset 0 0 60px rgba(0,0,0,0.5); }
-        .ice-ball { position: absolute; width: 32px; height: 32px; background: radial-gradient(circle at 30% 30%, #ffffff, #00d2ff, #0066ff); border-radius: 50%; box-shadow: 0 0 15px rgba(0,210,255,0.9), 0 0 30px rgba(0,150,255,0.5); z-index: 20; transform: translate(-50%, -50%); border: 2px solid rgba(255,255,255,0.8); transition: left 0.025s linear, top 0.025s linear; }
-        .player-avatar { position: absolute; width: 36px; height: 36px; border-radius: 50%; border: 3px solid white; overflow: hidden; transform: translate(-50%, -50%); z-index: 10; box-shadow: 0 0 10px rgba(0,0,0,0.5); }
         .case-cardboard { background: linear-gradient(135deg, #8B4513 0%, #D2691E 50%, #8B4513 100%); border: 3px solid #A0522D; }
         .case-collector { background: linear-gradient(135deg, #DC143C 0%, #FF1493 50%, #8B008B 100%); border: 3px solid #FFD700; }
-        .player-row-ready { border-color: rgba(0,255,100,0.5) !important; background: rgba(0,255,100,0.1) !important; }
-        .player-row-waiting { border-color: rgba(255,200,0,0.4) !important; background: rgba(255,200,0,0.05) !important; }
-        .player-row-presence { border-color: rgba(150,150,150,0.3) !important; }
         @keyframes goldGlow { 0%, 100% { text-shadow: 0 0 5px #facc15, 0 0 10px #facc15; } 50% { text-shadow: 0 0 20px #facc15, 0 0 30px #eab308; } }
         @keyframes purpleGlow { 0%, 100% { text-shadow: 0 0 5px #a855f7, 0 0 10px #a855f7; } 50% { text-shadow: 0 0 20px #a855f7, 0 0 30px #9333ea; } }
         @keyframes greenGlow { 0%, 100% { box-shadow: 0 0 5px #22c55e, 0 0 10px #22c55e; } 50% { box-shadow: 0 0 15px #22c55e, 0 0 25px #16a34a; } }
@@ -61,6 +55,10 @@
         .case-countdown-overlay { position: absolute; top: 0; left: 0; right: 0; background: rgba(0,0,0,0.7); padding: 4px; font-size: 10px; color: #fbbf24; text-align: center; font-family: monospace; z-index: 10; text-shadow: 0 0 5px #fbbf24; }
         .olympus-font { font-family: 'Georgia', serif; font-weight: bold; }
         .events-tab-active { background: linear-gradient(135deg, rgba(251,191,36,0.3), rgba(245,158,11,0.2)); border: 2px solid rgba(251,191,36,0.6); box-shadow: 0 0 20px rgba(251,191,36,0.4); }
+        .round-box { width: 30px; height: 30px; border-radius: 6px; border: 2px solid rgba(255,255,255,0.3); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; margin: 0 3px; transition: all 0.3s; }
+        .round-box.completed { background: linear-gradient(135deg, #22c55e, #16a34a); border-color: #22c55e; box-shadow: 0 0 10px #22c55e; }
+        .round-box.current { background: linear-gradient(135deg, #fbbf24, #f59e0b); border-color: #fbbf24; box-shadow: 0 0 10px #fbbf24; animation: pulse 1s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
     </style>
 </head>
 <body class="bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 min-h-screen text-white overflow-x-hidden">
@@ -84,7 +82,6 @@
         const db = firebase.database();
         const TelegramWebApp = window.Telegram?.WebApp;
         const ADMIN_WALLET = 'UQAWqaIPFSg81l9MlgAx0HBE9o3gpJMhk1dnyryKJXhWNHIc';
-        const TONCENTER_API = 'https://toncenter.com/api/v2';
         const BOT_TOKEN = '8325421899:AAG9t3yS4WWiwasRoHb-nbr3a94S9tQfHys';
         
         const PLAYER_COLORS = ['#FF6B6B','#FF9F43','#FFEAA7','#55EFC4','#74B9FF','#A29BFE','#FD79A8','#E17055','#00CEC9','#6C5CE7','#FDCB6E','#81ECEC','#FF7675','#DFE6E9','#B2BEC3'];
@@ -120,7 +117,7 @@
                 { id: 'stars_1_5', name: '1.5 ⭐️', displayChance: '6%', realChance: 6, type: 'stars', value: 1.5, emoji: '⭐️' },
                 { id: 'stars_5', name: '5 ⭐️', displayChance: '2%', realChance: 2, type: 'stars', value: 5, emoji: '⭐️' },
                 { id: 'bear', name: '🧸', displayChance: '1.5%', realChance: 1.5, type: 'item', sellPrice: 20, emoji: '🧸' },
-                { id: 'diamond_pro', name: '💎 PRO', displayChance: '0.5%', realChance: 0.5, type: 'collectible', emoji: '💎' }
+                { id: 'diamond_pro', name: '💎 PRO', displayChance: '0.5%', realChance: 0, type: 'collectible', emoji: '💎' }
             ],
             coal: [
                 { id: 'stars_5', name: '5 ⭐️', displayChance: '60.5%', realChance: 60.5, type: 'stars', value: 5, emoji: '⭐️' },
@@ -128,68 +125,68 @@
                 { id: 'pickaxe', name: 'Кирка ⛏️', displayChance: '10%', realChance: 10, type: 'item', sellPrice: 22, emoji: '⛏️' },
                 { id: 'stars_30', name: '30 ⭐️', displayChance: '6%', realChance: 6, type: 'stars', value: 30, emoji: '⭐️' },
                 { id: 'material', name: 'Материал 🧱', displayChance: '5%', realChance: 5, type: 'item', sellPrice: 80, emoji: '🧱' },
-                { id: 'brownie_pro', name: 'Happy Brownie PRO 💩', displayChance: '0.5%', realChance: 0.001, type: 'collectible', emoji: '💩' }
+                { id: 'brownie_pro', name: 'Happy Brownie PRO 💩', displayChance: '0.5%', realChance: 0, type: 'collectible', emoji: '💩' }
             ],
             platinum: [
                 { id: 'stars_35', name: '35 ⭐️', displayChance: '55%', realChance: 55, type: 'stars', value: 35, emoji: '⭐️' },
                 { id: 'stars_50', name: '50 ⭐️', displayChance: '35%', realChance: 35, type: 'stars', value: 50, emoji: '⭐️' },
-                { id: 'ring', name: '💍', displayChance: '5%', realChance: 5, type: 'collectible', emoji: '💍' },
+                { id: 'ring', name: '💍', displayChance: '5%', realChance: 0, type: 'collectible', emoji: '💍' },
                 { id: 'bday', name: 'B-day 🗓', displayChance: '4%', realChance: 4, type: 'item', sellPrice: 150, emoji: '🗓' },
-                { id: 'bday_pro', name: 'B-Day PRO 📅', displayChance: '1%', realChance: 1, type: 'collectible', emoji: '📅' }
+                { id: 'bday_pro', name: 'B-Day PRO 📅', displayChance: '1%', realChance: 0, type: 'collectible', emoji: '📅' }
             ],
             gold: [
                 { id: 'stars_50', name: '50 ⭐️', displayChance: '50%', realChance: 50, type: 'stars', value: 50, emoji: '⭐️' },
                 { id: 'stars_125', name: '125 ⭐️', displayChance: '35%', realChance: 35, type: 'stars', value: 125, emoji: '⭐️' },
                 { id: 'clover', name: '🍀 Clover Pin', displayChance: '10%', realChance: 10, type: 'item', sellPrice: 200, emoji: '🍀' },
-                { id: 'icecream', name: 'Ice Cream 🍦', displayChance: '3%', realChance: 3, type: 'collectible', emoji: '🍦' },
-                { id: 'clover_pro', name: '🍀 Clover Pin PRO', displayChance: '2%', realChance: 2, type: 'collectible', emoji: '🍀' }
+                { id: 'icecream', name: 'Ice Cream 🍦', displayChance: '3%', realChance: 0, type: 'collectible', emoji: '🍦' },
+                { id: 'clover_pro', name: '🍀 Clover Pin PRO', displayChance: '2%', realChance: 0, type: 'collectible', emoji: '🍀' }
             ],
             money: [
                 { id: 'stars_150', name: '150 ⭐️', displayChance: '45%', realChance: 45, type: 'stars', value: 150, emoji: '⭐️' },
                 { id: 'stars_75', name: '75 ⭐️', displayChance: '40%', realChance: 40, type: 'stars', value: 75, emoji: '⭐️' },
-                { id: 'trophy', name: '🏆', displayChance: '5%', realChance: 5, type: 'collectible', emoji: '🏆' },
-                { id: 'gem', name: '💎', displayChance: 5, realChance: 5, type: 'collectible', emoji: '💎' },
+                { id: 'trophy', name: '🏆', displayChance: '5%', realChance: 0, type: 'collectible', emoji: '🏆' },
+                { id: 'gem', name: '💎', displayChance: 5, realChance: 0, type: 'collectible', emoji: '💎' },
                 { id: 'bday_happy', name: 'Happy B-day 💈', displayChance: '4%', realChance: 4, type: 'collectible', emoji: '💈' },
-                { id: 'cigar', name: 'Snoop Cigar 🚬', displayChance: '1%', realChance: 1, type: 'collectible', emoji: '🚬' }
+                { id: 'cigar', name: 'Snoop Cigar 🚬', displayChance: '1%', realChance: 0, type: 'collectible', emoji: '🚬' }
             ],
             elite: [
                 { id: 'stars_200', name: '200 ⭐️', displayChance: '65%', realChance: 65, type: 'stars', value: 200, emoji: '⭐️' },
                 { id: 'stars_275', name: '275 ⭐️', displayChance: '25%', realChance: 25, type: 'stars', value: 275, emoji: '⭐️' },
-                { id: 'champagne', name: '🍾', displayChance: '8.5%', realChance: 8.5, type: 'collectible', emoji: '🍾' },
-                { id: 'socks', name: 'Носки 🧦', displayChance: '1%', realChance: 1, type: 'collectible', emoji: '🧦' },
-                { id: 'lightsword', name: 'Light Sword ⚔️', displayChance: '0.5%', realChance: 0.5, type: 'collectible', emoji: '⚔️' }
+                { id: 'champagne', name: '🍾', displayChance: '8.5%', realChance: 0, type: 'collectible', emoji: '🍾' },
+                { id: 'socks', name: 'Носки 🧦', displayChance: '1%', realChance: 0, type: 'collectible', emoji: '🧦' },
+                { id: 'lightsword', name: 'Light Sword ⚔️', displayChance: '0.5%', realChance: 0, type: 'collectible', emoji: '⚔️' }
             ],
             diamond: [
                 { id: 'stars_8', name: '8 ⭐️', displayChance: '70%', realChance: 70, type: 'stars', value: 8, emoji: '⭐️' },
                 { id: 'bear', name: 'Мишка 🧸', displayChance: '15%', realChance: 15, type: 'item', sellPrice: 20, emoji: '🧸' },
                 { id: 'stars_25', name: '25 ⭐️', displayChance: '9%', realChance: 9, type: 'stars', value: 25, emoji: '⭐️' },
                 { id: 'stars_80', name: '80 ⭐️', displayChance: '4%', realChance: 4, type: 'stars', value: 80, emoji: '⭐️' },
-                { id: 'diamond_pro', name: 'Алмаз PRO 💎', displayChance: '0.6%', realChance: 0.6, type: 'collectible', emoji: '💎' },
-                { id: 'snoop_pro', name: 'Snoop Dog PRO 🐕', displayChance: '0.4%', realChance: 0.4, type: 'collectible', emoji: '🐕' }
+                { id: 'diamond_pro', name: 'Алмаз PRO 💎', displayChance: '0.6%', realChance: 0, type: 'collectible', emoji: '💎' },
+                { id: 'snoop_pro', name: 'Snoop Dog PRO 🐕', displayChance: '0.4%', realChance: 0, type: 'collectible', emoji: '🐕' }
             ],
             winter: [
                 { id: 'stars_20', name: '20 ⭐️', displayChance: '60%', realChance: 60, type: 'stars', value: 20, emoji: '⭐️' },
                 { id: 'stars_35', name: '35 ⭐️', displayChance: '35%', realChance: 35, type: 'stars', value: 35, emoji: '⭐️' },
                 { id: 'stars_80', name: '80 ⭐️', displayChance: '3.5%', realChance: 3.5, type: 'stars', value: 80, emoji: '⭐️' },
-                { id: 'snake', name: '🎄 Lunar Snake 2025 🐍', displayChance: '1%', realChance: 1, type: 'collectible', emoji: '🐍' },
-                { id: 'scarf', name: '🧣 Зимнее сокровище', displayChance: '0.5%', realChance: 0.5, type: 'collectible', emoji: '🧣' }
+                { id: 'snake', name: '🎄 Lunar Snake 2025 🐍', displayChance: '1%', realChance: 0, type: 'collectible', emoji: '🐍' },
+                { id: 'scarf', name: '🧣 Зимнее сокровище', displayChance: '0.5%', realChance: 0, type: 'collectible', emoji: '🧣' }
             ],
             major: [
                 { id: 'stars_500', name: '500 ⭐️', displayChance: '50%', realChance: 50, type: 'stars', value: 500, emoji: '⭐️' },
                 { id: 'stars_1000', name: '1000 ⭐️', displayChance: '25%', realChance: 25, type: 'stars', value: 1000, emoji: '⭐️' },
                 { id: 'stars_2500', name: '2500 ⭐️', displayChance: '10%', realChance: 10, type: 'stars', value: 2500, emoji: '⭐️' },
                 { id: 'stars_5000', name: '5000 ⭐️', displayChance: '5%', realChance: 5, type: 'stars', value: 5000, emoji: '⭐️' },
-                { id: 'car', name: '🚗 Автомобиль', displayChance: '5%', realChance: 5, type: 'collectible', emoji: '🚗' },
-                { id: 'diamond_ring', name: '💍 Бриллиантовое кольцо', displayChance: '3%', realChance: 3, type: 'collectible', emoji: '💍' },
-                { id: 'gold_bar', name: '🥇 Золотой слиток', displayChance: '2%', realChance: 2, type: 'collectible', emoji: '🥇' }
+                { id: 'car', name: '🚗 Автомобиль', displayChance: '5%', realChance: 0, type: 'collectible', emoji: '🚗' },
+                { id: 'diamond_ring', name: '💍 Бриллиантовое кольцо', displayChance: '3%', realChance: 0, type: 'collectible', emoji: '💍' },
+                { id: 'gold_bar', name: '🥇 Золотой слиток', displayChance: '2%', realChance: 0, type: 'collectible', emoji: '🥇' }
             ],
             collector: [
-                { id: 'bear_pro', name: '🧸 PRO', displayChance: '55%', realChance: 55, type: 'collectible', emoji: '🧸' },
-                { id: 'gift_pro', name: '🎁 PRO', displayChance: '20%', realChance: 20, type: 'collectible', emoji: '🎁' },
-                { id: 'rocket_pro', name: '🚀 PRO', displayChance: '15%', realChance: 15, type: 'collectible', emoji: '🚀' },
-                { id: 'cup_pro', name: '🏆 PRO', displayChance: '5%', realChance: 5, type: 'collectible', emoji: '🏆' },
-                { id: 'cake_candle', name: '🍰 B-day Candle', displayChance: '2%', realChance: 2, type: 'collectible', emoji: '🍰' },
-                { id: 'ramen_pro', name: '🍜 Ramen PRO', displayChance: '1.5%', realChance: 0.5, type: 'collectible', emoji: '🍜' },
+                { id: 'bear_pro', name: '🧸 PRO', displayChance: '55%', realChance: 0, type: 'collectible', emoji: '🧸' },
+                { id: 'gift_pro', name: '🎁 PRO', displayChance: '20%', realChance: 0, type: 'collectible', emoji: '🎁' },
+                { id: 'rocket_pro', name: '🚀 PRO', displayChance: '15%', realChance: 0, type: 'collectible', emoji: '🚀' },
+                { id: 'cup_pro', name: '🏆 PRO', displayChance: '5%', realChance: 0, type: 'collectible', emoji: '🏆' },
+                { id: 'cake_candle', name: '🍰 B-day Candle', displayChance: '2%', realChance: 0, type: 'collectible', emoji: '🍰' },
+                { id: 'ramen_pro', name: '🍜 Ramen PRO', displayChance: '1.5%', realChance: 0, type: 'collectible', emoji: '🍜' },
                 { id: 'hat_pro', name: '🎩 Top hat', displayChance: '1%', realChance: 0, type: 'collectible', emoji: '🎩' },
                 { id: 'bird_pro', name: '🦅 Rare bird', displayChance: '0.5%', realChance: 0, type: 'collectible', emoji: '🦅' }
             ],
@@ -306,22 +303,23 @@
             ],
         };
         
-        const ICE_ARENA_PRIZES = [
-            { id: 'bear', name: '🧸 Мишка', chance: 40, type: 'item', sellPrice: 20, emoji: '🧸' },
-            { id: 'gloves', name: '🧤 Варежки', chance: 30, type: 'item', sellPrice: 50, emoji: '🧤' },
-            { id: 'fire', name: '🔥 Огонь', chance: 10, type: 'special', emoji: '🔥', message: 'Вы растопили лёд! Получаете 40% от ставок' },
-            { id: 'snow', name: '❄️ Снежинка', chance: 5, type: 'item', sellPrice: 125, emoji: '❄️' },
-            { id: 'snoop', name: '🐕 Snoop Dog', chance: 5, type: 'item', sellPrice: 130, emoji: '🐕' },
-            { id: 'winter_case', name: '☃️ Кейс Зимний', chance: 4, type: 'case_free', caseType: 'winter', emoji: '☃️' },
-            { id: 'elite_case', name: '🎖 Кейс Элитный', chance: 3, type: 'case_free', caseType: 'elite', emoji: '🎖' },
+        const GERAKL_10_REWARDS = [
+            { id: 'bear', name: '🧸 Мишка', chance: 35, type: 'item', sellPrice: 20, emoji: '🧸' },
+            { id: 'bear_pro', name: '🧸 PRO', chance: 20, type: 'collectible', emoji: '🧸' },
+            { id: 'material', name: '🧱 Материал', chance: 15, type: 'item', sellPrice: 80, emoji: '🧱' },
+            { id: 'champagne', name: '🍾 Бутылка', chance: 10, type: 'collectible', emoji: '🍾' },
+            { id: 'ring', name: '💍 Кольцо', chance: 8, type: 'collectible', emoji: '💍' },
+            { id: 'stars_25', name: '25 ⭐️', chance: 5, type: 'stars', value: 25, emoji: '⭐️' },
+            { id: 'stars_200', name: '200 ⭐️', chance: 3, type: 'stars', value: 200, emoji: '⭐️' },
             { id: 'stars_350', name: '350 ⭐️', chance: 2, type: 'stars', value: 350, emoji: '⭐️' },
-            { id: 'scarf', name: '🧣 Зимнее сокровище', chance: 0.5, type: 'collectible', emoji: '🧣' },
-            { id: 'dellko', name: '🔑 Promocode DELLKO', chance: 0.5, type: 'promo', code: 'DELLKO', emoji: '🔑' }
+            { id: 'dellko', name: '🔑 DELLKO', chance: 2, type: 'promo', code: 'DELLKO', emoji: '🔑' }
         ];
+        
+        const GERAKL_MULTIPLIERS = [1.0, 1.0, 1.3, 1.5, 1.8, 2.0, 2.5, 3.0, 4.0, 5.0, 6.5];
+        const GERAKL_ICE_CHANCES = [0.25, 0.28, 0.29, 0.40, 0.49, 0.64, 0.70, 0.75, 0.90, 0.90, 0.90];
         
         const TON_RATES = [{ stars: 50, ton: 0.6 }, { stars: 250, ton: 3 }, { stars: 500, ton: 6 }, { stars: 1000, ton: 12 }];
         const STARS_PACKAGES = [ { stars: 50, price: 50 }, { stars: 100, price: 100 }, { stars: 250, price: 250 }, { stars: 500, price: 500 }, { stars: 1000, price: 1000 } ];
-        const DEFAULT_LOBBY = { status: 'waiting', players: {}, presence: {}, readyPlayers: {}, winner: null, prizes: [], wonStars: 0, ballPosition: { x: 50, y: 50, vx: 0, vy: 0 }, countdownEnd: null, prizeClaimed: {}, finalBall: null, gameStartedAt: null };
         
         function App() {
             const [currentScreen, setCurrentScreen] = useState('cases');
@@ -372,25 +370,17 @@
             const [totalDeposits, setTotalDeposits] = useState(0);
             const [freeEliteSpin, setFreeEliteSpin] = useState(0);
             const [currentGame, setCurrentGame] = useState(null);
-            const [iceLobby, setIceLobby] = useState(null);
-            const [gameStatus, setGameStatus] = useState('waiting');
-            const [ballPos, setBallPos] = useState({ x: 50, y: 50 });
-            const [timerRemaining, setTimerRemaining] = useState(0);
-            const [myBet, setMyBet] = useState(25);
-            const [myBetInput, setMyBetInput] = useState(25);
-            const [hasBet, setHasBet] = useState(false);
-            const [isReady, setIsReady] = useState(false);
-            const [myColor, setMyColor] = useState('');
-            const [presenceCount, setPresenceCount] = useState(0);
-            const [bettingCount, setBettingCount] = useState(0);
-            const [readyCount, setReadyCount] = useState(0);
-            const [showVictoryBox, setShowVictoryBox] = useState(false);
-            const [victoryStars, setVictoryStars] = useState(0);
-            const [victoryPrize, setVictoryPrize] = useState(null);
-            const [boxOpened, setBoxOpened] = useState(false);
-            const [prizeClaimedLocal, setPrizeClaimedLocal] = useState(false);
+            const [geraklGameActive, setGeraklGameActive] = useState(false);
+            const [geraklBetAmount, setGeraklBetAmount] = useState(25);
+            const [geraklBetInput, setGeraklBetInput] = useState(25);
+            const [geraklRound, setGeraklRound] = useState(0);
+            const [geraklMultiplier, setGeraklMultiplier] = useState(1.0);
+            const [geraklCurrentWin, setGeraklCurrentWin] = useState(0);
+            const [geraklTimer, setGeraklTimer] = useState(25);
+            const [geraklResult, setGeraklResult] = useState(null);
+            const [geraklBoxOpened, setGeraklBoxOpened] = useState(false);
+            const [geraklBoxPrize, setGeraklBoxPrize] = useState(null);
             
-            // Полная инициализация приложения
             useEffect(() => {
                 const initApp = async () => {
                     let userId = null;
@@ -450,10 +440,9 @@
                 initApp();
             }, []);
             
-            // Таймеры ивента
             useEffect(() => {
                 const olympusTarget = new Date('2026-03-01T15:00:00').getTime();
-                const casesTarget = new Date('2026-03-01T12:00:00').getTime();
+                const casesTarget = new Date('2025-03-01T17:00:00').getTime();
                 const timer = setInterval(() => {
                     const now = Date.now();
                     const format = (diff) => {
@@ -470,7 +459,6 @@
                 return () => clearInterval(timer);
             }, []);
             
-            // Онлайн статус
             useEffect(() => {
                 if (!user?.id) return;
                 const ref = db.ref('online/' + user.id);
@@ -480,7 +468,6 @@
                 return () => ref.remove();
             }, [user?.id]);
             
-            // Авто-сохранение
             useEffect(() => {
                 if (!user?.id || isLoading) return;
                 const iv = setInterval(() => {
@@ -494,7 +481,6 @@
                 return () => clearInterval(iv);
             }, [balance, cases, inventory, tasks, inventorySlots, usedPromos, wonPromos, user?.id, isLoading, totalDeposits, freeEliteSpin]);
             
-            // Таймер ежедневного кейса
             useEffect(() => {
                 if (isLoading || !cases.daily) return;
                 const DAILY_COOLDOWN = 23 * 60 * 60 * 1000;
@@ -518,282 +504,19 @@
                 return () => clearInterval(timer);
             }, [cases.daily, isLoading]);
             
-            // Слушатель лобби
             useEffect(() => {
-                if (!currentGame?.lobbyId || !user?.id) return;
-                const lobbyRef = db.ref('iceLobbies/' + currentGame.lobbyId);
-                lobbyRef.on('value', snap => {
-                    const data = snap.val();
-                    if (!data) return;
-                    setIceLobby(data);
-                    setGameStatus(data.status || 'waiting');
-                    const players = data.players || {};
-                    setPresenceCount(data.presence ? Object.keys(data.presence).length : 0);
-                    setBettingCount(Object.keys(players).length);
-                    setReadyCount(data.readyPlayers ? Object.keys(data.readyPlayers).length : 0);
-                    if (players[user.id]) {
-                        setHasBet(true);
-                        setMyBet(players[user.id].bet);
-                        setMyBetInput(players[user.id].bet);
-                    } else if (data.status !== 'playing' && data.status !== 'countdown') {
-                        setHasBet(false); setIsReady(false);
-                    }
-                    if (data.readyPlayers?.[user.id]) setIsReady(true);
-                    else if (data.status === 'open') setIsReady(false);
-                    if (data.ballPosition) setBallPos(data.ballPosition);
-                    if (data.status === 'countdown' && data.countdownEnd) {
-                        setTimerRemaining(Math.max(0, Math.ceil((data.countdownEnd - Date.now()) / 1000)));
-                    }
-                    if (data.status === 'finished' && data.winner?.id === user.id && !data.prizeClaimed?.[user.id] && !prizeClaimedLocal) {
-                        setVictoryStars(data.wonStars || 0);
-                        setVictoryPrize(data.prizes?.[0] || null);
-                        setShowVictoryBox(true);
-                        setBoxOpened(false);
-                    }
-                });
-                return () => lobbyRef.off();
-            }, [currentGame?.lobbyId, user?.id]);
-            
-            // Тик таймера
-            useEffect(() => {
-                if(gameStatus !== 'countdown') return;
-                const iv = setInterval(() => setTimerRemaining(p => (p <= 1 ? 0 : p - 1)), 1000);
+                if (!geraklGameActive || geraklResult) return;
+                const iv = setInterval(() => {
+                    setGeraklTimer(prev => {
+                        if (prev <= 1) {
+                            handleGeraklIce();
+                            return 0;
+                        }
+                        return prev - 1;
+                    });
+                }, 1000);
                 return () => clearInterval(iv);
-            }, [gameStatus]);
-            
-            // Функции игры
-            const joinIceLobby = async (lid) => {
-                if(!user?.id) return;
-                const ref = db.ref('iceLobbies/' + lid);
-                const snap = await ref.once('value');
-                const d = snap.val() || {};
-                const st = d.status || 'waiting';
-                setMyColor(getRandomColor());
-                if(st === 'playing' || st === 'countdown') {
-                    setCurrentGame({ type: 'ice', lobbyId: lid, spectator: true });
-                } else {
-                    setShowVictoryBox(false); setBoxOpened(false); setPrizeClaimedLocal(false); setHasBet(false); setIsReady(false);
-                    setCurrentGame({ type: 'ice', lobbyId: lid, spectator: false });
-                    await db.ref(`iceLobbies/${lid}/presence/${user.id}`).set({ name: user.name, avatar: user.avatar, joinedAt: Date.now(), color: getRandomColor() });
-                    const s2 = await ref.once('value');
-                    if((s2.val()?.presence ? Object.keys(s2.val().presence).length : 0) >= 2 && st === 'waiting') await ref.update({ status: 'open' });
-                }
-            };
-            
-            const leaveIceLobby = async () => {
-                if(!currentGame?.lobbyId) return;
-                const lid = currentGame.lobbyId;
-                await db.ref(`iceLobbies/${lid}/presence/${user.id}`).remove();
-                if(hasBet) {
-                     const snap = await db.ref(`iceLobbies/${lid}`).once('value');
-                     if(snap.val()?.status === 'open' || snap.val()?.status === 'waiting') {
-                         const bet = snap.val().players[user.id].bet;
-                         setBalance(b => b + bet);
-                         await db.ref(`users/${user.id}/balance`).set(balance + bet);
-                         await db.ref(`iceLobbies/${lid}/players/${user.id}`).remove();
-                         await db.ref(`iceLobbies/${lid}/readyPlayers/${user.id}`).remove();
-                     }
-                }
-                setCurrentGame(null);
-            };
-            
-            const placeBet = async () => {
-                if(gameStatus !== 'open' || balance < myBetInput) return;
-                setBalance(b => b - myBetInput);
-                await db.ref(`users/${user.id}/balance`).set(balance - myBetInput);
-                await db.ref(`iceLobbies/${currentGame.lobbyId}/players/${user.id}`).set({ name: user.name, avatar: user.avatar, bet: myBetInput, color: myColor, timestamp: Date.now() });
-                setHasBet(true); setMyBet(myBetInput);
-            };
-            
-            const changeBet = async () => {
-                 if(gameStatus !== 'open') return;
-                 const ref = db.ref(`iceLobbies/${currentGame.lobbyId}`);
-                 const snap = await ref.once('value');
-                 const oldBet = snap.val().players[user.id].bet;
-                 if(balance + oldBet < myBetInput) return;
-                 setBalance(b => b + oldBet - myBetInput);
-                 await db.ref(`users/${user.id}/balance`).set(balance + oldBet - myBetInput);
-                 await ref.child(`players/${user.id}`).update({ bet: myBetInput });
-                 setMyBet(myBetInput);
-            };
-            
-            const toggleReady = async () => {
-                if(!hasBet) return;
-                const ref = db.ref(`iceLobbies/${currentGame.lobbyId}/readyPlayers/${user.id}`);
-                if(isReady) { await ref.remove(); setIsReady(false); }
-                else { 
-                    await ref.set({ name: user.name, readyAt: Date.now() }); 
-                    setIsReady(true);
-                    const s = await db.ref(`iceLobbies/${currentGame.lobbyId}`).once('value');
-                    const p = s.val().players || {};
-                    const r = s.val().readyPlayers || {};
-                    if(Object.keys(p).length >= 2 && Object.keys(r).length >= Object.keys(p).length) {
-                        await db.ref(`iceLobbies/${currentGame.lobbyId}`).update({ status: 'countdown', countdownEnd: Date.now() + 10000 });
-                        setTimeout(() => triggerGameStart(currentGame.lobbyId), 10000);
-                    }
-                }
-            };
-            
-            const triggerGameStart = async (lid) => {
-                const ref = db.ref(`iceLobbies/${lid}`);
-                const s = await ref.once('value');
-                if(s.val().status === 'countdown') {
-                    await ref.update({ status: 'playing', gameStartedAt: Date.now() });
-                    runPhysics(ref);
-                }
-            };
-            
-            const runPhysics = (ref) => {
-                let x = 50, y = 50, vx = (Math.random()-0.5)*15, vy = (Math.random()-0.5)*15;
-                const iv = setInterval(async () => {
-                     x += vx * 0.4; y += vy * 0.4;
-                     vx *= 0.994; vy *= 0.994;
-                     if(Math.sqrt((x-50)**2 + (y-50)**2) > 44) { vx *= -1; vy *= -1; }
-                     await ref.child('ballPosition').set({ x, y, vx, vy });
-                     if(Math.abs(vx) < 0.1 && Math.abs(vy) < 0.1) {
-                         clearInterval(iv);
-                         finishIceGame(ref, x, y);
-                     }
-                }, 25);
-            };
-            
-            const finishIceGame = async (ref, x, y) => {
-                const s = await ref.once('value');
-                const players = Object.values(s.val().players);
-                const winner = players[Math.floor(Math.random()*players.length)];
-                const total = players.reduce((a,b)=>a+b.bet,0);
-                await ref.update({ status: 'finished', winner, wonStars: Math.floor(total*0.65), prizes: [ICE_ARENA_PRIZES[0]], finalBall: {x,y} });
-                if(winner.id === user.id) {
-                    const nb = balance + Math.floor(total*0.65);
-                    setBalance(nb);
-                    await db.ref(`users/${user.id}/balance`).set(nb);
-                }
-            };
-            
-            const openVictoryBox = async () => {
-                 setBoxOpened(true); setPrizeClaimedLocal(true);
-                 await db.ref(`iceLobbies/${currentGame.lobbyId}/prizeClaimed/${user.id}`).set(true);
-                 if(victoryPrize.type === 'stars') setBalance(b => b + victoryPrize.value);
-                 else if(victoryPrize.type === 'item') addToInventory(victoryPrize);
-            };
-            
-            const exitLobbyAfterGame = async () => {
-                 await db.ref(`iceLobbies/${currentGame.lobbyId}`).set(DEFAULT_LOBBY);
-                 setCurrentGame(null); setHasBet(false); setIsReady(false); setShowVictoryBox(false);
-            };
-            
-            const exitLobbyNonWinner = async () => {
-                 await db.ref(`iceLobbies/${currentGame.lobbyId}/presence/${user.id}`).remove();
-                 setCurrentGame(null); setHasBet(false); setIsReady(false);
-            };
-            
-            const getCasePrice = (ct) => {
-                const c = cases[ct];
-                if (!c) return 0;
-                if (c.id === 'daily' && c.freeCount > 0) return 0;
-                if (c.freeCount > 0) return 0;
-                if (c.discountPrice && c.discountPrice !== c.price) return c.discountPrice;
-                return c.price;
-            };
-            
-            const handleSelectCase = (caseData) => {
-                setSpinResult(null); setFakeItems([]); setSelectedCase(caseData);
-            };
-            
-            const openCase = async (caseType) => {
-                const cData = cases[caseType];
-                if(cData.id === 'daily' && cData.freeCount === 0) { alert('Ежедневный кейс не готов!'); return; }
-                const price = getCasePrice(caseType);
-                const isFree = cData.freeCount > 0;
-                if(!isFree && balance < price) { alert('Недостаточно звезд!'); return; }
-                let nb = balance;
-                if(cData.id === 'daily' && isFree) {
-                    const now = Date.now();
-                    setCases(p => ({ ...p, daily: { ...p.daily, freeCount: 0, lastOpened: now } }));
-                    await db.ref(`users/${user.id}/cases/daily`).update({ freeCount: 0, lastOpened: now });
-                } else if(isFree) {
-                     const nf = cData.freeCount - 1;
-                     setCases(p => ({ ...p, [caseType]: { ...p[caseType], freeCount: nf } }));
-                     await db.ref(`users/${user.id}/cases/${caseType}/freeCount`).set(nf);
-                } else {
-                     nb -= price;
-                     setBalance(nb);
-                     await db.ref(`users/${user.id}/balance`).set(nb);
-                }
-                setIsSpinning(false); setSpinResult(null); setFakeItems([]); setRouletteOffset(0); setRouletteKey(k => k+1);
-                const items = CASE_REWARDS[caseType];
-                let won = items[0], r = Math.random()*100, cum = 0;
-                for(let i of items) { cum += i.realChance; if(r <= cum) { won = i; break; } }
-                const tape = [];
-                for(let i=0; i<80; i++) tape.push(i===70 ? won : items[Math.floor(Math.random()*items.length)]);
-                setIsSpinning(true);
-                setTimeout(() => {
-                     setFakeItems(tape);
-                     setTimeout(() => {
-                         const cw = rouletteContainerRef.current ? rouletteContainerRef.current.offsetWidth : window.innerWidth;
-                         const target = (70 * 136 + 68 - cw/2);
-                         setRouletteOffset(-target);
-                     }, 50);
-                }, 50);
-                setTimeout(async () => {
-                     setSpinResult(won); setIsSpinning(false);
-                     if(won.type === 'stars') {
-                         const fb = nb + won.value;
-                         setBalance(fb);
-                         await db.ref(`users/${user.id}/balance`).set(fb);
-                     } else {
-                         await addToInventory(won);
-                     }
-                }, 6600);
-            };
-            
-            const addToInventory = async (item) => {
-                if(inventory.length >= inventorySlots) { alert('Инвентарь полон!'); return; }
-                const ni = [...inventory, { ...item, uniqueId: Date.now(), collected: Date.now() }];
-                setInventory(ni);
-                await db.ref(`users/${user.id}/inventory`).set(ni);
-            };
-            
-            const sellItem = async (item) => {
-                if(item.type === 'random_case_box') { setRandomCaseItem(item); setShowRandomCaseModal(true); return; }
-                if(item.type === 'ice_gift') { setSelectedIceGift(item); setShowIceGiftModal(true); return; }
-                if(item.type === 'man_item' || item.type === 'man_bonus_elite') { setSelectedManItem(item); setShowManItemModal(true); return; }
-                if(item.type === 'collectible') { setSelectedCollectible(item); setShowCollectibleModal(true); return; }
-                if(confirm(`Продать ${item.name} за ${item.sellPrice}⭐️?`)) {
-                     const nb = balance + item.sellPrice;
-                     const ni = inventory.filter(i => i.uniqueId !== item.uniqueId);
-                     setBalance(nb); setInventory(ni);
-                     await db.ref(`users/${user.id}`).update({ balance: nb, inventory: ni });
-                }
-            };
-            
-            const sellIceGift = async () => {
-                 if(!selectedIceGift) return;
-                 const nb = balance + 25;
-                 const ni = inventory.filter(i => i.uniqueId !== selectedIceGift.uniqueId);
-                 setBalance(nb); setInventory(ni);
-                 await db.ref(`users/${user.id}`).update({ balance: nb, inventory: ni });
-                 setShowIceGiftModal(false); setSelectedIceGift(null);
-                 alert('Продано за 25⭐️!');
-            };
-            
-            const exchangeRandomCaseBox = async () => {
-                 const keys = ['cardboard','coal','platinum','diamond','money','gold','elite','collector'];
-                 const rKey = keys[Math.floor(Math.random()*keys.length)];
-                 const ni = inventory.filter(i => i.uniqueId !== randomCaseItem.uniqueId);
-                 const nc = { ...cases, [rKey]: { ...cases[rKey], freeCount: (cases[rKey].freeCount||0)+1 } };
-                 if(rKey === 'collector') nc.collector.locked = false;
-                 setInventory(ni); setCases(nc);
-                 await db.ref(`users/${user.id}`).update({ inventory: ni, cases: nc });
-                 setShowRandomCaseModal(false); setRandomCaseItem(null);
-                 alert(`Выпал кейс: ${cases[rKey].name}!`);
-            };
-            
-            const unlockSlot = async () => {
-                 if(balance < 50) return;
-                 setBalance(b => b - 50); setInventorySlots(s => s + 1);
-                 await db.ref(`users/${user.id}`).update({ balance: balance - 50, inventorySlots: inventorySlots + 1 });
-            };
+            }, [geraklGameActive, geraklResult]);
             
             const checkPromo = async () => {
                 const code = promoCode.toUpperCase().trim();
@@ -801,7 +524,7 @@
                 if(!code) return;
                 if(usedPromos.includes(code)) { setPromoError('Уже использован!'); return; }
                 if(code === 'DELLKO') {
-                     if(!wonPromos.includes('DELLKO')) { setPromoError('Только если выиграли в Ледяном Катке!'); return; }
+                     if(!wonPromos.includes('DELLKO')) { setPromoError('Только если выиграли в 13 Подвиге Геракла!'); return; }
                      const nc = { ...cases, money: { ...cases.money, freeCount: (cases.money.freeCount || 0) + 3 } };
                      setCases(nc);
                      await addToInventory({ name: '🧊 Лёд (1/3)', emoji: '🧊', type: 'ice', part: 1 });
@@ -938,205 +661,359 @@
                  }
             };
             
-            const adminGiveReward = async (tid, r) => {
-                 const snap = await db.ref('users/' + tid).once('value');
+            const adminGiveReward = async (uid, r) => {
+                 const snap = await db.ref('users/' + uid).once('value');
                  const ud = snap.val() || {};
                  if(r.type === 'stars') {
                      const nb = (ud.balance || 0) + r.amount;
-                     await db.ref('users/' + tid + '/balance').set(nb);
-                     if(tid === user.id) setBalance(nb);
+                     await db.ref('users/' + uid + '/balance').set(nb);
+                     if(uid === user.id) setBalance(nb);
                  } else if(r.type === 'case') {
                      const cur = ud.cases?.[r.caseType]?.freeCount || 0;
-                     await db.ref(`users/${tid}/cases/${r.caseType}/freeCount`).set(cur + r.count);
-                     if(tid === user.id) setCases(p => ({ ...p, [r.caseType]: { ...p[r.caseType], freeCount: cur + r.count } }));
+                     await db.ref(`users/${uid}/cases/${r.caseType}/freeCount`).set(cur + r.count);
+                     if(uid === user.id) setCases(p => ({ ...p, [r.caseType]: { ...p[r.caseType], freeCount: cur + r.count } }));
                  } else if(r.type === 'unlock_collector') {
-                     await db.ref(`users/${tid}/cases/collector/locked`).set(false);
-                     if(tid === user.id) setCases(p => ({ ...p, collector: { ...p.collector, locked: false } }));
+                     await db.ref(`users/${uid}/cases/collector/locked`).set(false);
+                     if(uid === user.id) setCases(p => ({ ...p, collector: { ...p.collector, locked: false } }));
                  } else if(r.type === 'reset_daily') {
-                     await db.ref(`users/${tid}/cases/daily`).update({ freeCount: 1, lastOpened: 0 });
-                     if(tid === user.id) setCases(p => ({ ...p, daily: { ...p.daily, freeCount: 1, lastOpened: 0 } }));
+                     await db.ref(`users/${uid}/cases/daily`).update({ freeCount: 1, lastOpened: 0 });
+                     if(uid === user.id) setCases(p => ({ ...p, daily: { ...p.daily, freeCount: 1, lastOpened: 0 } }));
                  } else if(r.type === 'item' && r.item) {
                      const currentInventory = ud.inventory || [];
                      const newItem = { ...r.item, uniqueId: Date.now(), collected: Date.now() };
                      const newInventory = [...currentInventory, newItem];
-                     await db.ref(`users/${tid}/inventory`).set(newInventory);
-                     if(tid === user.id) setInventory(newInventory);
+                     await db.ref(`users/${uid}/inventory`).set(newInventory);
+                     if(uid === user.id) setInventory(newInventory);
                  }
                  alert('Награда выдана!');
             };
             
-            // ===== РЕНДЕР ВСЕХ ЭКРАНОВ =====
-            // Ice Arena
-            if(currentGame?.type === 'ice') {
-                const isSpectator = currentGame.spectator === true;
-                const presence = iceLobby?.presence ? Object.entries(iceLobby.presence) : [];
-                const players = iceLobby?.players ? Object.entries(iceLobby.players) : [];
-                const readySet = new Set(iceLobby?.readyPlayers ? Object.keys(iceLobby.readyPlayers) : []);
-                const bettedSet = new Set(players.map(([id]) => id));
-                const totalBank = players.reduce((s, [, p]) => s + p.bet, 0);
-                const isWinner = gameStatus === 'finished' && iceLobby?.winner?.id === user?.id;
-                const isLoser = gameStatus === 'finished' && iceLobby?.winner && iceLobby.winner.id !== user?.id;
-                const statusText = () => {
-                    if(isSpectator) return '👁 Наблюдатель';
-                    switch(gameStatus) {
-                        case 'waiting': return `⏳ Ожидание игроков (${presenceCount}/2+)`;
-                        case 'open': return presenceCount >= 2 ? '✅ Ставки открыты!' : '⏳ Ожидание...';
-                        case 'countdown': return `⏰ Старт через ${timerRemaining} сек!`;
-                        case 'playing': return '🔴 Игра идёт!';
-                        case 'finished': return isWinner ? '🏆 Вы победили!' : `🏆 Победил: ${iceLobby?.winner?.name}`;
-                        default: return '';
+            const getCasePrice = (ct) => {
+                const c = cases[ct];
+                if (!c) return 0;
+                if (c.id === 'daily' && c.freeCount > 0) return 0;
+                if (c.freeCount > 0) return 0;
+                if (c.discountPrice && c.discountPrice !== c.price) return c.discountPrice;
+                return c.price;
+            };
+            
+            const handleSelectCase = (caseData) => {
+                setSpinResult(null); setFakeItems([]); setSelectedCase(caseData);
+            };
+            
+            const openCase = async (caseType) => {
+                const cData = cases[caseType];
+                if(cData.id === 'daily' && cData.freeCount === 0) { alert('Ежедневный кейс не готов!'); return; }
+                const price = getCasePrice(caseType);
+                const isFree = cData.freeCount > 0;
+                if(!isFree && balance < price) { alert('Недостаточно звезд!'); return; }
+                let nb = balance;
+                if(cData.id === 'daily' && isFree) {
+                    const now = Date.now();
+                    setCases(p => ({ ...p, daily: { ...p.daily, freeCount: 0, lastOpened: now } }));
+                    await db.ref(`users/${user.id}/cases/daily`).update({ freeCount: 0, lastOpened: now });
+                } else if(isFree) {
+                     const nf = cData.freeCount - 1;
+                     setCases(p => ({ ...p, [caseType]: { ...p[caseType], freeCount: nf } }));
+                     await db.ref(`users/${user.id}/cases/${caseType}/freeCount`).set(nf);
+                } else {
+                     nb -= price;
+                     setBalance(nb);
+                     await db.ref(`users/${user.id}/balance`).set(nb);
+                }
+                setIsSpinning(false); setSpinResult(null); setFakeItems([]); setRouletteOffset(0); setRouletteKey(k => k+1);
+                const items = CASE_REWARDS[caseType];
+                let won = items[0], r = Math.random()*100, cum = 0;
+                for(let i of items) { cum += i.realChance; if(r <= cum) { won = i; break; } }
+                const tape = [];
+                for(let i=0; i<80; i++) tape.push(i===70 ? won : items[Math.floor(Math.random()*items.length)]);
+                setIsSpinning(true);
+                setTimeout(() => {
+                     setFakeItems(tape);
+                     setTimeout(() => {
+                         const cw = rouletteContainerRef.current ? rouletteContainerRef.current.offsetWidth : window.innerWidth;
+                         const target = (70 * 136 + 68 - cw/2);
+                         setRouletteOffset(-target);
+                     }, 50);
+                }, 50);
+                setTimeout(async () => {
+                     setSpinResult(won); setIsSpinning(false);
+                     if(won.type === 'stars') {
+                         const fb = nb + won.value;
+                         setBalance(fb);
+                         await db.ref(`users/${user.id}/balance`).set(fb);
+                     } else if(won.type === 'man_bonus_elite') {
+                         const nc = { ...cases, elite: { ...cases.elite, freeCount: (cases.elite.freeCount || 0) + 1 } };
+                         setCases(nc);
+                         await db.ref(`users/${user.id}/cases/elite/freeCount`).set((cases.elite.freeCount || 0) + 1);
+                         alert('🎉 Получен бесплатный кейс «Элита»!');
+                     } else {
+                         await addToInventory(won);
+                     }
+                }, 6600);
+            };
+            
+            const addToInventory = async (item) => {
+                if(inventory.length >= inventorySlots) { alert('Инвентарь полон!'); return; }
+                const ni = [...inventory, { ...item, uniqueId: Date.now(), collected: Date.now() }];
+                setInventory(ni);
+                await db.ref(`users/${user.id}/inventory`).set(ni);
+            };
+            
+            const sellItem = async (item) => {
+                if(item.type === 'random_case_box') { setRandomCaseItem(item); setShowRandomCaseModal(true); return; }
+                if(item.type === 'ice_gift') { setSelectedIceGift(item); setShowIceGiftModal(true); return; }
+                if(item.type === 'man_item' || item.type === 'man_bonus_elite') { setSelectedManItem(item); setShowManItemModal(true); return; }
+                if(item.type === 'collectible') { setSelectedCollectible(item); setShowCollectibleModal(true); return; }
+                if(confirm(`Продать ${item.name} за ${item.sellPrice}⭐️?`)) {
+                     const nb = balance + item.sellPrice;
+                     const ni = inventory.filter(i => i.uniqueId !== item.uniqueId);
+                     setBalance(nb); setInventory(ni);
+                     await db.ref(`users/${user.id}`).update({ balance: nb, inventory: ni });
+                }
+            };
+            
+            const sellIceGift = async () => {
+                 if(!selectedIceGift) return;
+                 const nb = balance + 25;
+                 const ni = inventory.filter(i => i.uniqueId !== selectedIceGift.uniqueId);
+                 setBalance(nb); setInventory(ni);
+                 await db.ref(`users/${user.id}`).update({ balance: nb, inventory: ni });
+                 setShowIceGiftModal(false); setSelectedIceGift(null);
+                 alert('Продано за 25⭐️!');
+            };
+            
+            const exchangeRandomCaseBox = async () => {
+                 const keys = ['cardboard','coal','platinum','diamond','money','gold','elite','collector'];
+                 const rKey = keys[Math.floor(Math.random()*keys.length)];
+                 const ni = inventory.filter(i => i.uniqueId !== randomCaseItem.uniqueId);
+                 const nc = { ...cases, [rKey]: { ...cases[rKey], freeCount: (cases[rKey].freeCount||0)+1 } };
+                 if(rKey === 'collector') nc.collector.locked = false;
+                 setInventory(ni); setCases(nc);
+                 await db.ref(`users/${user.id}`).update({ inventory: ni, cases: nc });
+                 setShowRandomCaseModal(false); setRandomCaseItem(null);
+                 alert(`Выпал кейс: ${cases[rKey].name}!`);
+            };
+            
+            const unlockSlot = async () => {
+                 if(balance < 50) return;
+                 setBalance(b => b - 50); setInventorySlots(s => s + 1);
+                 await db.ref(`users/${user.id}`).update({ balance: balance - 50, inventorySlots: inventorySlots + 1 });
+            };
+            
+            const startGeraklGame = async () => {
+                if (balance < geraklBetInput || geraklBetInput < 25) {
+                    alert('Недостаточно звезд или ставка меньше 25!');
+                    return;
+                }
+                setBalance(b => b - geraklBetInput);
+                await db.ref(`users/${user.id}/balance`).set(balance - geraklBetInput);
+                setGeraklBetAmount(geraklBetInput);
+                setGeraklRound(0);
+                setGeraklMultiplier(1.0);
+                setGeraklCurrentWin(geraklBetInput);
+                setGeraklTimer(25);
+                setGeraklGameActive(true);
+                setGeraklResult(null);
+                setGeraklBoxOpened(false);
+                setGeraklBoxPrize(null);
+            };
+            
+            const handleGeraklFlame = async () => {
+                if (geraklRound >= 10) {
+                    handleGeraklCashout();
+                    return;
+                }
+                const iceChance = GERAKL_ICE_CHANCES[geraklRound];
+                const randomValue = Math.random();
+                
+                if (randomValue < iceChance) {
+                    handleGeraklIce();
+                } else {
+                    const nextRound = geraklRound + 1;
+                    const nextMultiplier = GERAKL_MULTIPLIERS[nextRound];
+                    const nextWin = Math.floor(geraklBetAmount * nextMultiplier);
+                    setGeraklRound(nextRound);
+                    setGeraklMultiplier(nextMultiplier);
+                    setGeraklCurrentWin(nextWin);
+                    setGeraklTimer(25);
+                }
+            };
+            
+            const handleGeraklCashout = async () => {
+                const profit = geraklCurrentWin - geraklBetAmount;
+                setBalance(b => b + geraklCurrentWin);
+                await db.ref(`users/${user.id}/balance`).set(balance + geraklCurrentWin);
+                setGeraklResult({
+                    type: 'cashout',
+                    round: geraklRound,
+                    win: geraklCurrentWin,
+                    profit: profit
+                });
+                setGeraklGameActive(false);
+                
+                if (geraklRound >= 10) {
+                    const prize = getGeraklBoxPrize();
+                    setGeraklBoxPrize(prize);
+                    if (prize.type === 'stars') {
+                        const totalWin = geraklCurrentWin + prize.value;
+                        setBalance(b => b + prize.value);
+                        await db.ref(`users/${user.id}/balance`).set(balance + prize.value);
+                    } else if (prize.type === 'item') {
+                        await addToInventory(prize);
+                    } else if (prize.type === 'collectible') {
+                        await addToInventory(prize);
+                    } else if (prize.type === 'promo') {
+                        await addToInventory(prize);
                     }
-                };
+                }
+            };
+            
+            const handleGeraklIce = () => {
+                setGeraklResult({
+                    type: 'ice',
+                    round: geraklRound
+                });
+                setGeraklGameActive(false);
+            };
+            
+            const getGeraklBoxPrize = () => {
+                let cum = 0, r = Math.random() * 100;
+                for (const prize of GERAKL_10_REWARDS) {
+                    cum += prize.chance;
+                    if (r <= cum) return prize;
+                }
+                return GERAKL_10_REWARDS[0];
+            };
+            
+            const openGeraklBox = async () => {
+                setGeraklBoxOpened(true);
+                if (geraklBoxPrize.type === 'promo') {
+                    const np = [...wonPromos, geraklBoxPrize.code];
+                    setWonPromos(np);
+                    await db.ref(`users/${user.id}/wonPromos`).set(np);
+                }
+            };
+            
+            const exitGeraklGame = () => {
+                setGeraklGameActive(false);
+                setGeraklResult(null);
+                setGeraklBoxOpened(false);
+                setGeraklBoxPrize(null);
+                setCurrentGame(null);
+            };
+            
+            if (currentGame?.type === 'gerakl') {
                 return (
-                    <div className="min-h-screen bg-gradient-to-b from-blue-950 via-indigo-950 to-blue-900 pb-4">
+                    <div className="min-h-screen bg-gradient-to-b from-red-900 via-orange-900 to-red-800 pb-4" style={{
+                        backgroundImage: `url('gerakl.jpg')`,
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center',
+                        backgroundBlendMode: 'overlay'
+                    }}>
                         <div className="max-w-lg mx-auto p-3">
                             <div className="flex justify-between items-center mb-3">
                                 <div>
-                                    <h1 className="text-xl font-bold text-white">☃️ Ледяной Каток</h1>
-                                    <div className="text-xs text-cyan-400">Лобби #{currentGame.lobbyId}</div>
+                                    <h1 className="text-xl font-bold text-white">🪬 13 Подвиг Геракла 🌊</h1>
                                 </div>
-                                <button onClick={leaveIceLobby} className="bg-red-600/40 hover:bg-red-600 border border-red-500/50 px-3 py-1.5 rounded-xl font-bold transition text-sm">✕ Выйти</button>
+                                <button onClick={exitGeraklGame} className="bg-red-600/40 hover:bg-red-600 border border-red-500/50 px-3 py-1.5 rounded-xl font-bold transition text-sm">✕ Выйти</button>
                             </div>
-                            <div className={`rounded-xl p-2.5 mb-3 text-center font-bold border text-sm ${gameStatus === 'countdown' ? 'bg-yellow-500/20 border-yellow-500/50 animate-pulse' : gameStatus === 'open' ? 'bg-cyan-500/20 border-cyan-500/50' : gameStatus === 'playing' ? 'bg-red-500/20 border-red-500/50' : gameStatus === 'finished' ? 'bg-purple-500/20 border-purple-500/50' : 'bg-gray-700/50 border-gray-600/50'}`}>{statusText()}</div>
-                            {gameStatus === 'countdown' && timerRemaining > 0 && (
-                                <div className="text-center mb-3">
-                                    <div className="text-6xl font-bold text-yellow-400 animate-pulse">{timerRemaining}</div>
-                                    <div className="text-gray-400 text-xs">секунд до старта</div>
-                                </div>
-                            )}
-                            <div className="flex justify-center mb-4">
-                                <div className={`ice-circle relative ${gameStatus === 'open' ? 'pulse-glow' : gameStatus === 'countdown' ? 'ready-glow' : ''}`}>
-                                    <div className="absolute inset-0 opacity-10" style={{backgroundImage: 'radial-gradient(circle, #00d2ff 1px, transparent 1px)', backgroundSize: '20px 20px'}} />
-                                    {gameStatus === 'waiting' && <div className="absolute inset-0 flex items-center justify-center"><div className="text-5xl opacity-30">❓</div></div>}
-                                    {gameStatus === 'playing' && <div className="ice-ball" style={{left: ballPos.x + '%', top: ballPos.y + '%'}} />}
-                                    {gameStatus === 'finished' && iceLobby?.finalBall && <div className="ice-ball" style={{left: iceLobby.finalBall.x + '%', top: iceLobby.finalBall.y + '%', background: 'radial-gradient(circle at 30% 30%, #fff, #ffd700)', boxShadow: '0 0 25px #ffd700, 0 0 50px rgba(255,215,0,0.5)'}} />}
-                                </div>
-                            </div>
-                            {!isSpectator && gameStatus === 'open' && (
-                                <div className="glass rounded-xl p-3 mb-3 border border-cyan-500/30">
-                                    {!hasBet ? (
+                            
+                            {geraklResult ? (
+                                <div className="glass rounded-xl p-4 mb-3 text-center border border-yellow-500/30">
+                                    {geraklResult.type === 'ice' ? (
                                         <>
-                                            <p className="text-center text-cyan-300 font-bold mb-2 text-sm">💰 Ваша ставка</p>
-                                            <div className="flex gap-2 mb-2">
-                                                <input type="number" min="25" value={myBetInput} onChange={e => setMyBetInput(Math.max(25, Number(e.target.value)))} className="flex-1 bg-gray-800 border border-cyan-600 rounded-lg p-2.5 text-center text-lg text-white" />
-                                                <button onClick={() => setMyBetInput(p => p + 25)} className="bg-cyan-700 hover:bg-cyan-600 px-3 rounded-lg font-bold transition text-sm">+25</button>
-                                                <button onClick={() => setMyBetInput(p => p + 100)} className="bg-cyan-700 hover:bg-cyan-600 px-3 rounded-lg font-bold transition text-sm">+100</button>
-                                            </div>
-                                            <button onClick={placeBet} disabled={balance < myBetInput || myBetInput < 25} className="w-full bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 py-2.5 rounded-xl font-bold disabled:opacity-50 transition text-sm">Поставить {myBetInput}⭐️</button>
-                                            <p className="text-center text-xs text-gray-500 mt-1">Баланс: {balance.toFixed(0)}⭐️ | Мин: 25⭐️</p>
+                                            <div className="text-5xl mb-2">🧊</div>
+                                            <div className="font-bold text-red-400 text-xl mb-2">ЛЁД!</div>
+                                            <div className="text-gray-300 text-sm mb-1">Вы продержались: {geraklResult.round} раундов</div>
+                                            <div className="text-gray-400 text-sm mb-3">Ставка: {geraklBetAmount}⭐️ | Выигрыш: 0⭐️</div>
+                                            <button onClick={exitGeraklGame} className="w-full bg-gray-600 hover:bg-gray-500 py-2.5 rounded-xl font-bold transition text-sm">Выйти</button>
                                         </>
                                     ) : (
                                         <>
-                                            <div className="text-center mb-2"><div className="text-green-400 font-bold">✅ Ставка: {myBet}⭐️</div></div>
-                                            <div className="flex gap-2 mb-2">
-                                                <input type="number" min="25" value={myBetInput} onChange={e => setMyBetInput(Math.max(25, Number(e.target.value)))} className="flex-1 bg-gray-800 border border-gray-600 rounded-lg p-2 text-center text-sm text-white" />
-                                                <button onClick={changeBet} disabled={myBetInput === myBet} className="bg-orange-600 hover:bg-orange-500 px-3 rounded-lg font-bold transition text-xs disabled:opacity-40">Изменить</button>
-                                            </div>
-                                            <button onClick={toggleReady} className={`w-full py-3 rounded-xl font-bold transition ${isReady ? 'bg-gradient-to-r from-green-500 to-emerald-600 ready-glow text-white' : 'bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-500 hover:to-gray-600 border border-gray-500'}`}>{isReady ? '✅ Готов! (нажмите для отмены)' : '🏁 Готов к игре'}</button>
-                                            {bettingCount > 0 && <p className="text-center text-xs text-gray-400 mt-1">Готовы: {readyCount}/{bettingCount}</p>}
-                                        </>
-                                    )}
-                                </div>
-                            )}
-                            {!isSpectator && gameStatus === 'waiting' && (
-                                <div className="glass rounded-xl p-4 mb-3 text-center border border-gray-600/30">
-                                    <div className="text-3xl mb-2 animate-bounce">⏳</div>
-                                    <div className="font-bold text-gray-300 text-sm">Ожидаем ещё игроков...</div>
-                                    <div className="text-gray-500 text-xs mt-1">Ставки откроются когда зайдут 2+ игроков</div>
-                                    <div className="flex justify-center gap-2 mt-2">
-                                        {[1, 2].map(i => <div key={i} className={`w-8 h-8 rounded-full border-2 flex items-center justify-center text-sm ${i <= presenceCount ? 'border-cyan-400 bg-cyan-400/20 text-cyan-300' : 'border-gray-600 bg-gray-800 text-gray-600'}`}>{i <= presenceCount ? '👤' : '○'}</div>)}
-                                    </div>
-                                    <div className="text-cyan-400 text-xs mt-1">{presenceCount}/2</div>
-                                </div>
-                            )}
-                            {!isSpectator && gameStatus === 'playing' && hasBet && (
-                                <div className="glass rounded-xl p-3 mb-3 text-center border border-red-500/30">
-                                    <div className="text-2xl animate-spin mb-1">🌀</div>
-                                    <div className="font-bold text-red-300 text-sm">Шайба катится...</div>
-                                    <div className="text-gray-400 text-xs">Ставка: {myBet}⭐️ | Банк: {totalBank}⭐️</div>
-                                </div>
-                            )}
-                            {isSpectator && (
-                                <div className="glass rounded-xl p-3 mb-3 text-center border border-yellow-500/30">
-                                    <div className="text-2xl mb-1">👁</div>
-                                    <div className="text-yellow-400 font-bold text-sm">Вы наблюдатель</div>
-                                    <div className="text-gray-500 text-xs">Игра уже началась</div>
-                                </div>
-                            )}
-                            {isLoser && (
-                                <div className="glass rounded-xl p-4 mb-3 text-center border border-gray-500/30">
-                                    <div className="text-4xl mb-2">😔</div>
-                                    <div className="font-bold text-gray-300">Победил {iceLobby?.winner?.name}</div>
-                                    <div className="text-gray-400 text-xs mt-1 mb-3">Банк: {totalBank}⭐️ → победитель получил {Math.floor(totalBank * 0.65)}⭐️</div>
-                                    <button onClick={exitLobbyNonWinner} className="w-full bg-gray-600 hover:bg-gray-500 py-2.5 rounded-xl font-bold transition text-sm">Выйти из лобби</button>
-                                </div>
-                            )}
-                            <div className="glass rounded-xl p-3 mb-3">
-                                <div className="flex justify-between items-center mb-2">
-                                    <h3 className="font-bold text-cyan-300 text-sm">👥 В лобби ({presenceCount})</h3>
-                                    <span className="text-xs text-gray-400">Банк: {totalBank}⭐️</span>
-                                </div>
-                                <div className="space-y-1.5 max-h-44 overflow-y-auto">
-                                    {presence.map(([id, p]) => {
-                                        const hasBetted = bettedSet.has(id);
-                                        const isReadyP = readySet.has(id);
-                                        const pData = hasBetted ? iceLobby.players[id] : null;
-                                        const isMe = id === user.id;
-                                        return (
-                                            <div key={id} className={`flex items-center gap-2 p-2 rounded-lg border text-xs transition ${isReadyP ? 'player-row-ready' : hasBetted ? 'player-row-waiting' : 'player-row-presence bg-gray-800/30'}`}>
-                                                <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{background: pData?.color || p.color || '#888'}} />
-                                                <span className={`flex-1 font-medium ${isMe ? 'text-cyan-300' : 'text-white'}`}>{p.name}{isMe && ' (Вы)'}</span>
-                                                <div className="flex items-center gap-1.5">
-                                                    {hasBetted && pData && <span className="text-yellow-400 font-bold">{pData.bet}⭐️</span>}
-                                                    {isReadyP && <span className="text-green-400 font-bold">✅</span>}
-                                                    {hasBetted && !isReadyP && <span className="text-yellow-500">⏳</span>}
-                                                    {!hasBetted && <span className="text-gray-500 italic">в лобби</span>}
+                                            <div className="text-5xl mb-2">🎉</div>
+                                            <div className="font-bold text-green-400 text-xl mb-2">Вы забрали выигрыш!</div>
+                                            <div className="text-gray-300 text-sm mb-1">Раундов: {geraklResult.round}</div>
+                                            <div className="text-yellow-400 font-bold text-lg mb-1">Выигрыш: {geraklResult.win}⭐️</div>
+                                            <div className="text-green-400 text-sm mb-3">Чистая прибыль: +{geraklResult.profit}⭐️</div>
+                                            {geraklBoxPrize && !geraklBoxOpened && (
+                                                <>
+                                                    <div className="text-7xl mb-3 cursor-pointer hover:scale-110 transition-transform active:scale-95 select-none" onClick={openGeraklBox}>📦</div>
+                                                    <p className="text-cyan-300 text-xs animate-pulse mb-3">Нажмите на коробку!</p>
+                                                </>
+                                            )}
+                                            {geraklBoxPrize && geraklBoxOpened && (
+                                                <div className="bg-gray-800/60 rounded-xl p-3 mb-3">
+                                                    <p className="text-gray-400 text-xs mb-1">Бонусный приз:</p>
+                                                    <p className="text-3xl">{geraklBoxPrize.emoji}</p>
+                                                    <p className="text-white font-bold mt-1">{geraklBoxPrize.name}</p>
                                                 </div>
-                                            </div>
-                                        );
-                                    })}
-                                    {presence.length === 0 && <div className="text-gray-500 text-center py-3 text-xs">Никого нет...</div>}
-                                </div>
-                            </div>
-                            <div className="glass rounded-xl p-3">
-                                <h3 className="font-bold text-center text-cyan-300 text-xs mb-2">🎁 Возможные бонусы</h3>
-                                <div className="flex flex-wrap justify-center gap-1.5 text-xl">
-                                    {['🧸', '🧤', '❄️', '🐕', '☃️', '🎖', '⭐️', '🧣', '🔑'].map((e, i) => <span key={i} className="bg-gray-800/60 p-1.5 rounded-lg border border-white/10">{e}</span>)}
-                                </div>
-                            </div>
-                        </div>
-                        {showVictoryBox && isWinner && (
-                            <div className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-4">
-                                <div className="glass rounded-2xl p-6 max-w-sm w-full text-center border border-yellow-500/60">
-                                    <h2 className="text-3xl font-bold mb-1 text-yellow-400">🏆 Победа!</h2>
-                                    <p className="text-gray-300 mb-1 text-sm">Вы выиграли:</p>
-                                    <p className="text-4xl font-bold text-yellow-400 mb-4">{victoryStars} ⭐️</p>
-                                    {!boxOpened ? (
-                                        <>
-                                            <p className="text-gray-400 text-sm mb-3">Откройте коробку для бонусного приза</p>
-                                            <div className="text-7xl mb-3 cursor-pointer hover:scale-110 transition-transform active:scale-95 select-none" onClick={openVictoryBox}>📦</div>
-                                            <p className="text-cyan-300 text-xs animate-pulse">Нажмите на коробку!</p>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <div className="bg-gray-800/60 rounded-xl p-4 mb-4">
-                                                <p className="text-gray-400 text-xs mb-1">Бонусный приз:</p>
-                                                <p className="text-3xl">{victoryPrize?.emoji}</p>
-                                                <p className="text-white font-bold mt-1">{victoryPrize?.name}</p>
-                                            </div>
-                                            <button onClick={exitLobbyAfterGame} className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 py-3 rounded-xl font-bold transition">✅ Выйти из лобби</button>
+                                            )}
+                                            <button onClick={exitGeraklGame} className="w-full bg-green-600 hover:bg-green-500 py-2.5 rounded-xl font-bold transition text-sm">Выйти</button>
                                         </>
                                     )}
                                 </div>
-                            </div>
-                        )}
+                            ) : geraklGameActive ? (
+                                <>
+                                    <div className="glass rounded-xl p-4 mb-3 text-center border border-yellow-500/30">
+                                        <div className="text-3xl mb-2">⏱️</div>
+                                        <div className="text-5xl font-bold text-yellow-400 mb-2">{geraklTimer}</div>
+                                        <div className="text-gray-400 text-xs mb-3">секунд до выбора</div>
+                                        
+                                        <div className="grid grid-cols-2 gap-4 mb-4">
+                                            <div className="bg-gray-800/60 rounded-lg p-3">
+                                                <div className="text-gray-400 text-xs mb-1">Текущий выигрыш</div>
+                                                <div className="text-2xl font-bold text-yellow-400">{geraklCurrentWin}⭐️</div>
+                                            </div>
+                                            <div className="bg-gray-800/60 rounded-lg p-3">
+                                                <div className="text-gray-400 text-xs mb-1">Множитель</div>
+                                                <div className="text-2xl font-bold text-orange-400">{geraklMultiplier}x</div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="flex gap-2 mb-4">
+                                            <button onClick={handleGeraklFlame} className="flex-1 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 py-3 rounded-xl font-bold transition text-sm">🔥 Пламя</button>
+                                            <button onClick={handleGeraklCashout} className="flex-1 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 py-3 rounded-xl font-bold transition text-sm">🧊 Забрать</button>
+                                        </div>
+                                        
+                                        <div className="flex justify-center flex-wrap">
+                                            {[...Array(10)].map((_, i) => (
+                                                <div key={i} className={`round-box ${i < geraklRound ? 'completed' : i === geraklRound ? 'current' : ''}`}>
+                                                    {i + 1}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="glass rounded-xl p-3">
+                                        <h3 className="font-bold text-center text-yellow-300 text-xs mb-2">🎁 Возможные награды за 10 раундов</h3>
+                                        <div className="flex flex-wrap justify-center gap-1.5 text-xl">
+                                            {['🧸', '🧸 PRO', '🧱', '🍾', '💍', '25⭐️', '200⭐️', '350⭐️', '🔑'].map((e, i) => <span key={i} className="bg-gray-800/60 p-1.5 rounded-lg border border-white/10">{e}</span>)}
+                                        </div>
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="glass rounded-xl p-4 mb-3 text-center border border-yellow-500/30">
+                                    <div className="text-3xl mb-2 animate-bounce">🪬</div>
+                                    <div className="font-bold text-yellow-300 text-lg mb-2">Соверши 13 подвиг!</div>
+                                    <div className="text-gray-400 text-xs mb-3">Сделай ставку и пройди 10 раундов</div>
+                                    
+                                    <div className="flex gap-2 mb-3">
+                                        <input type="number" min="25" value={geraklBetInput} onChange={e => setGeraklBetInput(Math.max(25, Number(e.target.value)))} className="flex-1 bg-gray-800 border border-yellow-600 rounded-lg p-2.5 text-center text-lg text-white" />
+                                        <button onClick={() => setGeraklBetInput(p => p + 25)} className="bg-yellow-700 hover:bg-yellow-600 px-3 rounded-lg font-bold transition text-sm">+25</button>
+                                        <button onClick={() => setGeraklBetInput(p => p + 100)} className="bg-yellow-700 hover:bg-yellow-600 px-3 rounded-lg font-bold transition text-sm">+100</button>
+                                    </div>
+                                    <button onClick={startGeraklGame} disabled={balance < geraklBetInput || geraklBetInput < 25} className="w-full bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-500 hover:to-orange-500 py-2.5 rounded-xl font-bold disabled:opacity-50 transition text-sm">Начать игру ({geraklBetInput}⭐️)</button>
+                                    <p className="text-center text-xs text-gray-500 mt-1">Баланс: {balance.toFixed(0)}⭐️ | Мин: 25⭐️</p>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 );
             }
             
-            // Admin Panel
             if(isAdmin) {
-                const filteredUsers = allUsers.filter(u => !adminUserSearch || (u.name && u.name.toLowerCase().includes(adminUserSearch.toLowerCase())) || (u.username && u.username.toLowerCase().includes(adminUserSearch.toLowerCase())));
+                const filteredUsers = allUsers.filter(u => !adminUserSearch || (u.name && u.name.toLowerCase().includes(adminUserSearch.toLowerCase())) || (u.username && u.username.toLowerCase().includes(adminUserSearch.toLowerCase())) || (u.id && u.id.toLowerCase().includes(adminUserSearch.toLowerCase())));
                 return (
                     <div className="min-h-screen bg-gray-900 p-4">
                         <div className="max-w-4xl mx-auto">
@@ -1163,7 +1040,7 @@
                                 {adminScreen === 'users' && !selectedUser && (
                                     <div>
                                         <div className="mb-4">
-                                            <input type="text" placeholder="🔍 Поиск по имени или нику..." value={adminUserSearch} onChange={e => setAdminUserSearch(e.target.value)} className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-2 text-sm" />
+                                            <input type="text" placeholder="🔍 Поиск по имени, нику или ID..." value={adminUserSearch} onChange={e => setAdminUserSearch(e.target.value)} className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-2 text-sm" />
                                         </div>
                                         <div className="space-y-2 max-h-96 overflow-y-auto">
                                             {filteredUsers.map(u => (
@@ -1215,7 +1092,6 @@
                 );
             }
             
-            // ===== MAIN GAME SCREEN =====
             return (
                 <div className="min-h-screen pb-24">
                     <header className="p-4 flex justify-between items-center glass sticky top-0 z-50">
@@ -1225,7 +1101,6 @@
                     
                     {paymentStatus && <div className="mx-4 mt-2 p-3 rounded-lg text-center text-xs bg-blue-500/20 border border-blue-500">{paymentStatus}</div>}
                     
-                    {/* MODALS */}
                     {showRandomCaseModal && (
                         <div className="fixed inset-0 bg-black/90 z-[60] flex items-center justify-center p-4">
                             <div className="glass rounded-2xl p-6 max-w-sm w-full text-center">
@@ -1320,11 +1195,20 @@
                         {currentScreen === 'cases' && (
                             <div>
                                 <h2 className="text-2xl font-bold mb-4 text-center">🎰 Кейсы</h2>
+                                
                                 {cases.diamond?.freeCount > 0 && <div className="bg-green-500/20 border border-green-500 rounded-lg p-3 mb-3 text-center text-sm animate-pulse">🎁 Бесплатных кейсов Алмаз: {cases.diamond.freeCount}</div>}
                                 {cases.elite?.freeCount > 0 && <div className="bg-green-500/20 border border-green-500 rounded-lg p-3 mb-3 text-center text-sm animate-pulse">🎁 Бесплатных кейсов Элита: {cases.elite.freeCount}</div>}
                                 {freeEliteSpin > 0 && <div className="bg-green-500/20 border border-green-500 rounded-lg p-3 mb-3 text-center text-sm animate-pulse">🎁 Бесплатных прокрутов Элита: {freeEliteSpin}</div>}
+                                {cases.winter?.freeCount > 0 && <div className="bg-cyan-500/20 border border-cyan-500 rounded-lg p-3 mb-3 text-center text-sm animate-pulse">🎁 Бесплатных кейсов Зимний: {cases.winter.freeCount}</div>}
+                                {cases.man?.freeCount > 0 && <div className="bg-slate-500/20 border border-slate-500 rounded-lg p-3 mb-3 text-center text-sm animate-pulse">🎁 Бесплатных кейсов Мужык: {cases.man.freeCount}</div>}
+                                {cases.collector?.freeCount > 0 && <div className="bg-pink-500/20 border border-pink-500 rounded-lg p-3 mb-3 text-center text-sm animate-pulse">🎁 Бесплатных кейсов Коллекционер: {cases.collector.freeCount}</div>}
+                                {cases.cardboard?.freeCount > 0 && <div className="bg-amber-500/20 border border-amber-500 rounded-lg p-3 mb-3 text-center text-sm animate-pulse">🎁 Бесплатных кейсов Картон: {cases.cardboard.freeCount}</div>}
+                                {cases.coal?.freeCount > 0 && <div className="bg-gray-500/20 border border-gray-500 rounded-lg p-3 mb-3 text-center text-sm animate-pulse">🎁 Бесплатных кейсов Уголёк: {cases.coal.freeCount}</div>}
+                                {cases.platinum?.freeCount > 0 && <div className="bg-gray-300/20 border border-gray-300 rounded-lg p-3 mb-3 text-center text-sm animate-pulse">🎁 Бесплатных кейсов Платина: {cases.platinum.freeCount}</div>}
+                                {cases.gold?.freeCount > 0 && <div className="bg-yellow-500/20 border border-yellow-500 rounded-lg p-3 mb-3 text-center text-sm animate-pulse">🎁 Бесплатных кейсов Золотой: {cases.gold.freeCount}</div>}
+                                {cases.money?.freeCount > 0 && <div className="bg-green-500/20 border border-green-500 rounded-lg p-3 mb-3 text-center text-sm animate-pulse">🎁 Бесплатных кейсов Денежный: {cases.money.freeCount}</div>}
+                                {cases.star?.freeCount > 0 && <div className="bg-amber-400/20 border border-amber-400 rounded-lg p-3 mb-3 text-center text-sm animate-pulse">🎁 Бесплатных кейсов Звездный: {cases.star.freeCount}</div>}
                                 
-                                {/* SPECIAL CASES */}
                                 <div className="mb-6">
                                     <h3 className="text-lg font-bold text-center mb-3 text-purple-300 special-header">🔮 Особые 🔮</h3>
                                     <div className="grid grid-cols-2 gap-4">
@@ -1365,7 +1249,6 @@
                                     </div>
                                 </div>
                                 
-                                {/* ORDINARY CASES */}
                                 <div className="mb-6">
                                     <h3 className="text-lg font-bold text-center mb-3 text-yellow-300 ordinary-header">🎁 Обычные 🎁</h3>
                                     <div className="grid grid-cols-2 gap-4">
@@ -1405,13 +1288,16 @@
                             <div>
                                 <h2 className="text-2xl font-bold mb-4 text-center">🎮 Игры</h2>
                                 <div className="space-y-4">
-                                    <div className="glass rounded-xl p-5 border border-cyan-500/30">
-                                        <h3 className="text-xl font-bold mb-1 text-center text-cyan-300">☃️ Ледяной Каток</h3>
-                                        <p className="text-gray-400 mb-1 text-center text-xs">Дождитесь 2+ игроков → ставьте → жмите «Готов»</p>
-                                        <p className="text-cyan-400 text-center text-xs mb-3">Победитель получает 65% от банка + бонус 📦</p>
-                                        <div className="grid grid-cols-5 gap-2">
-                                            {[1,2,3,4,5,6,7,8,9,10].map(i => <button key={i} onClick={() => joinIceLobby(i)} className="bg-cyan-700 hover:bg-cyan-600 py-2 rounded-lg text-sm font-bold transition">#{i}</button>)}
-                                        </div>
+                                    <div className="glass rounded-xl p-5 border border-yellow-500/30" style={{
+                                        backgroundImage: `url('gerakl.jpg')`,
+                                        backgroundSize: 'cover',
+                                        backgroundPosition: 'center',
+                                        backgroundBlendMode: 'overlay'
+                                    }}>
+                                        <h3 className="text-xl font-bold mb-1 text-center text-yellow-300">🪬 13 Подвиг Геракла 🌊</h3>
+                                        <p className="text-gray-400 mb-1 text-center text-xs">Соверши 13 подвиг!</p>
+                                        <p className="text-yellow-400 text-center text-xs mb-3">Пройди 10 раундов и получи сундук 📦</p>
+                                        <button onClick={() => setCurrentGame({ type: 'gerakl' })} className="w-full bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-500 hover:to-orange-500 py-3 rounded-xl font-bold transition text-sm">Войти</button>
                                     </div>
                                     <div className="glass rounded-xl p-5 opacity-50 text-center">
                                         <h3 className="text-lg font-bold">В разработке... 👲</h3>
@@ -1539,7 +1425,6 @@
                         )}
                     </main>
                     
-                    {/* ROULETTE MODAL */}
                     {selectedCase && (
                         <div className="fullscreen-modal flex items-center justify-center p-4">
                             <div className="w-full max-w-lg" ref={rouletteContainerRef}>
@@ -1585,7 +1470,6 @@
                         </div>
                     )}
                     
-                    {/* TOP UP MODAL */}
                     {showTopUp && (
                         <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
                             <div className="glass rounded-2xl p-5 max-w-sm w-full">
@@ -1615,7 +1499,6 @@
                         </div>
                     )}
                     
-                    {/* NAVIGATION */}
                     <nav className="fixed bottom-0 left-0 right-0 glass border-t border-white/10 p-2 z-40">
                         <div className="max-w-md mx-auto flex justify-around">
                             {[ { id: 'tasks', emoji: '📋', label: 'Задания' }, { id: 'cases', emoji: '🎁', label: 'Кейсы' }, { id: 'events', emoji: '🏛️', label: 'Ивенты' }, { id: 'games', emoji: '🎮', label: 'Игры' }, { id: 'profile', emoji: '👤', label: 'Профиль' } ].map(s => (
