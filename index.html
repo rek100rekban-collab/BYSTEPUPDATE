@@ -80,6 +80,7 @@
         .flower-bubble:hover { transform: scale(1.1); box-shadow: 0 0 40px rgba(255,105,180,0.8); }
         .flower-bubble.planted { animation: none; background: radial-gradient(circle, rgba(34,197,94,0.8) 0%, rgba(22,163,74,0.6) 50%, rgba(21,128,61,0.8) 100%); border-color: #4ade80; }
         .countdown-timer { font-family: 'Cinzel', serif; font-size: 2rem; color: #fbbf24; text-shadow: 0 0 20px #fbbf24; text-align: center; margin: 20px 0; }
+        .flower-countdown { font-family: 'Cinzel', serif; font-size: 2.5rem; color: #fbbf24; text-shadow: 0 0 20px #fbbf24, 0 0 40px #f59e0b; text-align: center; margin: 15px 0; letter-spacing: 2px; }
         .hades-instruction { background: linear-gradient(135deg, rgba(255,69,0,0.2), rgba(255,140,0,0.1)); border: 2px solid #ff4500; box-shadow: 0 0 20px rgba(255,69,0,0.4), inset 0 0 20px rgba(255,140,0,0.1); }
         .ticket-badge { background: linear-gradient(135deg, #8b0000, #ff4500); border: 2px solid #ff6347; box-shadow: 0 0 10px rgba(255,69,0,0.5); }
         .hades-rewards-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 10px; }
@@ -265,7 +266,7 @@
         ];
 
         const GERAKL_MULTIPLIERS = [1.0, 1.1, 1.4, 1.9, 2.3, 2.6, 3.8, 4.5, 5.5, 6.0, 10.0];
-        const GERAKL_ICE_CHANCES = [0.22, 0.25, 0.28, 0.29, 0.30, 0.35, 0.45, 0.45, 0.45, 0.50, 0.53];
+        const GERAKL_ICE_CHANCES = [0.15, 0.18, 0.18, 0.20, 0.30, 0.35, 0.45, 0.45, 0.45, 0.50, 0.53];
 
         const OLYMPUS_PROGRESS = [
             { required: 3, reward: 'star_3', label: '3 кейса Звездный⭐️', type: 'case', caseType: 'star', count: 3 },
@@ -402,10 +403,11 @@
             const [hadesProPrize, setHadesProPrize] = useState(null);
             const [hadesGameActive, setHadesGameActive] = useState(false);
 
-            const [flowerBankTimer, setFlowerBankTimer] = useState(0);
+            const [flowerBankReadyTime, setFlowerBankReadyTime] = useState(0);
             const [flowerBankPlanted, setFlowerBankPlanted] = useState(false);
             const [flowerBankReady, setFlowerBankReady] = useState(false);
             const [flowerBankReward, setFlowerBankReward] = useState(null);
+            const [flowerBankTimeLeft, setFlowerBankTimeLeft] = useState('');
 
             const [flowersUnlocked, setFlowersUnlocked] = useState(false);
             const [flowersTimeLeft, setFlowersTimeLeft] = useState('');
@@ -458,12 +460,28 @@
                             setOlympusFreeCount(data.olympusFreeCount !== undefined ? data.olympusFreeCount : 2);
                             setGefestLastTrade(data.gefestLastTrade || 0);
                             setFateTickets(data.fateTickets || 0);
-                            setFlowerBankPlanted(data.flowerBankPlanted || false);
-                            setFlowerBankTimer(data.flowerBankTimer || 0);
+                            
+                            // Проверяем состояние цветка при загрузке
+                            const savedReadyTime = data.flowerBankReadyTime || 0;
+                            const now = Date.now();
+                            if (savedReadyTime > now) {
+                                setFlowerBankPlanted(true);
+                                setFlowerBankReadyTime(savedReadyTime);
+                                setFlowerBankReady(false);
+                            } else if (savedReadyTime > 0 && savedReadyTime <= now) {
+                                setFlowerBankPlanted(false);
+                                setFlowerBankReadyTime(0);
+                                setFlowerBankReady(true);
+                            } else {
+                                setFlowerBankPlanted(false);
+                                setFlowerBankReadyTime(0);
+                                setFlowerBankReady(false);
+                            }
+                            
                             await db.ref('users/' + userId).update({ name: userData.name, username: userData.username || '', avatar: userData.avatar || '', cases: newMergedCases });
                         } else {
                             const newCases = { ...INITIAL_CASES, daily: { ...INITIAL_CASES.daily, freeCount: 1, lastOpened: 0 }, diamond: { ...INITIAL_CASES.diamond, freeCount: 5 } };
-                            const newUser = { balance: 0, cases: newCases, inventory: [], tasks: tasks, inventorySlots: 5, usedPromos: [], wonPromos: [], createdAt: Date.now(), lastActive: Date.now(), totalDeposits: 0, freeEliteSpin: 0, name: userData.name, username: userData.username || '', avatar: userData.avatar || '', olympusOpens: 0, olympusRewardsClaimed: [], olympusFreeCount: 2, gefestLastTrade: 0, fateTickets: 0, flowerBankPlanted: false, flowerBankTimer: 0 };
+                            const newUser = { balance: 0, cases: newCases, inventory: [], tasks: tasks, inventorySlots: 5, usedPromos: [], wonPromos: [], createdAt: Date.now(), lastActive: Date.now(), totalDeposits: 0, freeEliteSpin: 0, name: userData.name, username: userData.username || '', avatar: userData.avatar || '', olympusOpens: 0, olympusRewardsClaimed: [], olympusFreeCount: 2, gefestLastTrade: 0, fateTickets: 0, flowerBankReadyTime: 0 };
                             setCases(newCases);
                             setUser({ id: userId, ...userData });
                             await db.ref('users/' + userId).set(newUser);
@@ -489,13 +507,13 @@
                     db.ref('users/' + user.id).update({
                         balance, inventory, tasks, inventorySlots, usedPromos, wonPromos, lastActive: Date.now(), totalDeposits, freeEliteSpin,
                         olympusOpens, olympusRewardsClaimed, olympusFreeCount, gefestLastTrade, fateTickets,
-                        flowerBankPlanted, flowerBankTimer,
+                        flowerBankReadyTime,
                         'cases/daily/lastOpened': dailyData.lastOpened,
                         'cases/daily/freeCount': dailyData.freeCount
                     });
                 }, 5000);
                 return () => clearInterval(iv);
-            }, [balance, cases, inventory, tasks, inventorySlots, usedPromos, wonPromos, user?.id, isLoading, totalDeposits, freeEliteSpin, olympusOpens, olympusRewardsClaimed, olympusFreeCount, gefestLastTrade, fateTickets, flowerBankPlanted, flowerBankTimer]);
+            }, [balance, cases, inventory, tasks, inventorySlots, usedPromos, wonPromos, user?.id, isLoading, totalDeposits, freeEliteSpin, olympusOpens, olympusRewardsClaimed, olympusFreeCount, gefestLastTrade, fateTickets, flowerBankReadyTime]);
 
             useEffect(() => {
                 if (isLoading || !cases.daily) return;
@@ -551,18 +569,30 @@
                 return () => clearInterval(iv);
             }, [hadesGameActive, hadesReward]);
 
+            // Таймер обратного отсчета для Банка цветов
             useEffect(() => {
                 if (!flowerBankPlanted || flowerBankReady) return;
-                const iv = setInterval(() => {
+                
+                const updateTimer = () => {
                     const now = Date.now();
-                    const remaining = flowerBankTimer - now;
+                    const remaining = flowerBankReadyTime - now;
+                    
                     if (remaining <= 0) {
                         setFlowerBankReady(true);
-                        setFlowerBankTimer(0);
+                        setFlowerBankPlanted(false);
+                        setFlowerBankTimeLeft('00:00:00');
+                    } else {
+                        const h = Math.floor(remaining / (1000 * 60 * 60));
+                        const m = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
+                        const s = Math.floor((remaining % (1000 * 60)) / 1000);
+                        setFlowerBankTimeLeft(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`);
                     }
-                }, 1000);
+                };
+
+                updateTimer();
+                const iv = setInterval(updateTimer, 1000);
                 return () => clearInterval(iv);
-            }, [flowerBankPlanted, flowerBankReady, flowerBankTimer]);
+            }, [flowerBankPlanted, flowerBankReady, flowerBankReadyTime]);
 
             useEffect(() => {
                 if (!geraklGameActive || geraklResult) return;
@@ -632,7 +662,6 @@
                     setHadesScreen('buy');
                     return;
                 }
-                // Билет списывается ПОСЛЕ захода в игру
                 const nt = fateTickets - 1;
                 setFateTickets(nt);
                 db.ref(`users/${user.id}/fateTickets`).set(nt);
@@ -697,12 +726,12 @@
 
             const plantFlower = async () => {
                 const now = Date.now();
-                const timerEnd = now + (6 * 60 * 60 * 1000);
+                const readyTime = now + (6 * 60 * 60 * 1000); // 6 часов
                 setFlowerBankPlanted(true);
-                setFlowerBankTimer(timerEnd);
+                setFlowerBankReadyTime(readyTime);
                 setFlowerBankReady(false);
                 setFlowerBankReward(null);
-                await db.ref(`users/${user.id}`).update({ flowerBankPlanted: true, flowerBankTimer: timerEnd });
+                await db.ref(`users/${user.id}`).update({ flowerBankReadyTime: readyTime });
             };
 
             const collectFlowerReward = async () => {
@@ -725,8 +754,8 @@
 
                 setFlowerBankPlanted(false);
                 setFlowerBankReady(false);
-                setFlowerBankTimer(0);
-                await db.ref(`users/${user.id}`).update({ flowerBankPlanted: false, flowerBankTimer: 0 });
+                setFlowerBankReadyTime(0);
+                await db.ref(`users/${user.id}`).update({ flowerBankReadyTime: 0 });
             };
 
             const checkPromo = async () => {
@@ -1217,7 +1246,7 @@
             };
 
             const startGeraklGame = async () => {
-                if (balance < geraklBetInput || gerakлBetInput < 25) { alert('Недостаточно звезд или ставка меньше 25!'); return; }
+                if (balance < geraklBetInput || geraklBetInput < 25) { alert('Недостаточно звезд или ставка меньше 25!'); return; }
                 const nb = balance - geraklBetInput;
                 setBalance(nb);
                 await db.ref(`users/${user.id}/balance`).set(nb);
@@ -1363,7 +1392,6 @@
 
                             {hadesScreen === 'game' && (
                                 <div className="glass rounded-xl p-4 border border-red-500/30">
-                                    {/* Главный случайный приз на эту игру - сверху */}
                                     <div className="main-prize-display">
                                         <div className="label">Главный приз этой игры</div>
                                         <span className="emoji">{hadesProPrize?.emoji}</span>
@@ -1388,7 +1416,6 @@
                                         ))}
                                     </div>
 
-                                    {/* Возможные главные призы и награды - снизу */}
                                     <div className="mt-4">
                                         <h3 className="text-center text-sm font-bold text-yellow-400 mb-2 olympus-font">Возможные главные призы</h3>
                                         <div className="hades-rewards-grid mb-3">
@@ -1428,13 +1455,6 @@
             }
 
             if (currentGame?.type === 'flower_bank') {
-                const formatTime = (ms) => {
-                    const h = Math.floor(ms / (1000 * 60 * 60));
-                    const m = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
-                    const s = Math.floor((ms % (1000 * 60)) / 1000);
-                    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-                };
-
                 return (
                     <div className="min-h-screen bg-gradient-to-b from-pink-900 via-rose-900 to-pink-800 pb-4" style={{ backgroundImage: "url('roza.jpg')", backgroundSize: 'cover', backgroundPosition: 'center', backgroundBlendMode: 'overlay' }}>
                         <div className="max-w-lg mx-auto p-3">
@@ -1470,7 +1490,7 @@
                                 <div className="glass rounded-xl p-4 text-center border border-pink-500/30">
                                     <div className="flower-bubble planted mb-4">🌱</div>
                                     <h2 className="text-xl font-bold text-pink-300 mb-2">Растет...</h2>
-                                    <div className="countdown-timer">{formatTime(flowerBankTimer)}</div>
+                                    <div className="flower-countdown">{flowerBankTimeLeft}</div>
                                     <p className="text-gray-400 text-sm">До созревания</p>
                                 </div>
                             ) : (
@@ -2065,7 +2085,6 @@
                                     <button onClick={() => setShowTopUp(false)} className="text-2xl hover:text-red-400">×</button>
                                 </div>
                                 
-                                {/* Билет судьбы - первый пункт */}
                                 <p className="text-xs text-red-400 text-center mb-2 font-bold">🎟 БИЛЕТ СУДЬБЫ (Подземелье Аида)</p>
                                 <button onClick={buyFateTicket} disabled={balance < 5} className="w-full glass p-3 rounded-xl flex justify-between items-center hover:bg-white/10 border border-red-500/50 mb-4">
                                     <span className="font-bold text-red-400 text-sm">+1 🎟 Билет судьбы</span>
@@ -2118,4 +2137,3 @@
     </script>
 </body>
 </html>
-
