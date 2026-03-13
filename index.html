@@ -696,7 +696,6 @@
                             title: `${pkg.stars} звёзд`,
                             description: `Покупка ${pkg.stars} звёзд для игры Step By Step`,
                             payload: payload,
-                            provider_token: "", // ПУСТАЯ строка для Telegram Stars
                             currency: 'XTR',
                             prices: [{ label: `${pkg.stars} звёзд`, amount: pkg.price }]
                         })
@@ -764,7 +763,6 @@
                             title: 'Билет судьбы 🎟',
                             description: 'Покупка билета судьбы для входа в Подземелье Аида',
                             payload: payload,
-                            provider_token: "", // ПУСТАЯ строка для Telegram Stars
                             currency: 'XTR',
                             prices: [{ label: '1 билет судьбы', amount: HADES_TICKET_PRICE }]
                         })
