@@ -729,6 +729,10 @@
                                 const userData = snap.val() || {};
                                 setBalance(userData.balance || 0);
                                 setPaymentStatus('');
+                                // Закрываем WebApp после успешной оплаты
+                                if (TelegramWebApp && TelegramWebApp.close) {
+                                    TelegramWebApp.close();
+                                }
                             } catch (e) {
                                 console.error('Error updating balance:', e);
                                 setPaymentStatus('');
@@ -801,6 +805,10 @@
                                 const userData = snap.val() || {};
                                 setFateTickets(userData.fateTickets || 0);
                                 setPaymentStatus('');
+                                // Закрываем WebApp после успешной оплаты
+                                if (TelegramWebApp && TelegramWebApp.close) {
+                                    TelegramWebApp.close();
+                                }
                             } catch (e) {
                                 console.error('Error updating tickets:', e);
                                 setPaymentStatus('');
@@ -1766,7 +1774,7 @@
                         )}
 
                         {currentScreen === 'profile' && (
-                            <div className="min-h-screen pb-20" style={{ backgroundImage: "url('./hero.jpg')", backgroundSize: 'cover', backgroundPosition: 'center', backgroundBlendMode: 'overlay' }}>
+                            <div className="min-h-screen pb-20 bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900">
                                 <div className="glass rounded-xl p-2.5 mb-3 flex justify-between items-center">
                                     <span className="text-gray-400 text-sm">🟢 Онлайн:</span>
                                     <span className="font-bold text-green-400 text-sm">{onlineCount}</span>
