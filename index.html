@@ -682,121 +682,105 @@
             };
 
             // ИСПРАВЛЕННАЯ функция покупки звезд через Telegram Payments 2.0
-            const buyStars = async (pkg) => {
-                try {
-                    setPaymentStatus('Создание счета...');
+          const buyStars = async (pkg) => {
+    try {
+        setPaymentStatus('Создание счета...');
+        
+        const payload = `stars_${user.id}_${pkg.stars}_${Date.now()}`;
+        
+        const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/createInvoiceLink`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                title: `${pkg.stars} Stars`,
+                description: `Purchase ${pkg.stars} stars for Step By Step game`,
+                payload: payload,
+                provider_token: "",
+                currency: 'XTR',
+                prices: [{ label: `${pkg.stars} stars`, amount: pkg.stars }]
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.ok && data.result) {
+            setPaymentStatus('Ожидание оплаты...');
+            
+            if (TelegramWebApp && TelegramWebApp.openInvoice) {
+                TelegramWebApp.openInvoice(data.result, async (status) => {
+                    console.log('Invoice status:', status);
                     
-                    // Для покупки звезд используем XTR валюту и пустой provider_token
-                    const payload = `stars_${user.id}_${pkg.stars}_${Date.now()}`;
-                    
-                    const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/createInvoiceLink`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            title: `${pkg.stars} звёзд`,
-                            description: `Покупка ${pkg.stars} звёзд для игры Step By Step`,
-                            payload: payload,
-                            provider_token: "", // ПУСТАЯ строка для Telegram Stars
-                            currency: 'XTR',
-                            prices: [{ label: `${pkg.stars} звёзд`, amount: pkg.price }]
-                        })
-                    });
-                    
-                    const data = await response.json();
-                    
-                    if (data.ok && data.result) {
-                        setPaymentStatus('Ожидание оплаты...');
-                        
-                        if (TelegramWebApp && TelegramWebApp.openInvoice) {
-                            // Открываем инвойс через WebApp
-                            TelegramWebApp.openInvoice(data.result, async (status) => {
-                                console.log('Invoice status:', status);
-                                
-                                if (status === 'paid') {
-                                    // Начисляем звезды
-                                    const nb = balance + pkg.stars;
-                                    const nd = totalDeposits + pkg.stars;
-                                    setBalance(nb);
-                                    setTotalDeposits(nd);
-                                    await db.ref(`users/${user.id}`).update({ 
-                                        balance: nb, 
-                                        totalDeposits: nd 
-                                    });
-                                    checkDepositTasks(nd, pkg.stars);
-                                    setPaymentStatus(`✅ Зачислено ${pkg.stars} звёзд!`);
-                                    setTimeout(() => setPaymentStatus(''), 3000);
-                                } else if (status === 'cancelled') {
-                                    setPaymentStatus('❌ Оплата отменена');
-                                    setTimeout(() => setPaymentStatus(''), 3000);
-                                } else if (status === 'failed') {
-                                    setPaymentStatus('❌ Ошибка оплаты');
-                                    setTimeout(() => setPaymentStatus(''), 3000);
-                                }
-                            });
-                        } else {
-                            // Fallback: открываем ссылку в новом окне
-                            window.open(data.result, '_blank');
-                            setPaymentStatus('Откройте счет в Telegram. После оплаты обновите страницу.');
-                        }
-                    } else {
-                        console.error('Failed to create invoice:', data);
-                        setPaymentStatus('❌ Ошибка создания счета');
+                    if (status === 'paid') {
+                        setPaymentStatus('✅ Оплата подтверждена! Звёзды начислятся автоматически...');
+                        setTimeout(() => setPaymentStatus(''), 5000);
+                    } else if (status === 'cancelled') {
+                        setPaymentStatus('❌ Оплата отменена');
+                        setTimeout(() => setPaymentStatus(''), 3000);
+                    } else if (status === 'failed') {
+                        setPaymentStatus('❌ Ошибка оплаты');
                         setTimeout(() => setPaymentStatus(''), 3000);
                     }
-                } catch (e) {
-                    console.error('Payment error:', e);
-                    setPaymentStatus('❌ Ошибка: ' + e.message);
-                    setTimeout(() => setPaymentStatus(''), 3000);
-                }
-            };
+                });
+            } else {
+                window.open(data.result, '_blank');
+                setPaymentStatus('Откройте счет в Telegram');
+            }
+        } else {
+            console.error('Invoice creation failed:', data);
+            setPaymentStatus('❌ Ошибка создания счета');
+            setTimeout(() => setPaymentStatus(''), 3000);
+        }
+    } catch (e) {
+        console.error('Payment error:', e);
+        setPaymentStatus('❌ Ошибка: ' + e.message);
+        setTimeout(() => setPaymentStatus(''), 3000);
+    }
+};
 
             // ИСПРАВЛЕННАЯ функция покупки билета судьбы
-            const buyFateTicket = async () => {
-                try {
-                    setPaymentStatus('Создание счета...');
-                    
-                    const payload = `fate_ticket_${user.id}_${Date.now()}`;
-                    
-                    const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/createInvoiceLink`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            title: 'Билет судьбы 🎟',
-                            description: 'Покупка билета судьбы для входа в Подземелье Аида',
-                            payload: payload,
-                            provider_token: "", // ПУСТАЯ строка для Telegram Stars
-                            currency: 'XTR',
-                            prices: [{ label: '1 билет судьбы', amount: HADES_TICKET_PRICE }]
-                        })
-                    });
-                    
-                    const data = await response.json();
-                    
-                    if (data.ok && data.result) {
-                        setPaymentStatus('Ожидание оплаты...');
-                        
-                        if (TelegramWebApp && TelegramWebApp.openInvoice) {
-                            TelegramWebApp.openInvoice(data.result, async (status) => {
-                                if (status === 'paid') {
-                                    const nt = fateTickets + 1;
-                                    setFateTickets(nt);
-                                    await db.ref(`users/${user.id}/fateTickets`).set(nt);
-                                    setPaymentStatus('✅ Билет куплен!');
-                                    setTimeout(() => setPaymentStatus(''), 3000);
-                                } else if (status === 'cancelled') {
-                                    setPaymentStatus('❌ Отменено');
-                                    setTimeout(() => setPaymentStatus(''), 3000);
-                                }
-                            });
-                        } else {
-                            window.open(data.result, '_blank');
-                        }
+          const buyFateTicket = async () => {
+    try {
+        setPaymentStatus('Создание счета...');
+        
+        const payload = `fate_ticket_${user.id}_${Date.now()}`;
+        
+        const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/createInvoiceLink`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                title: 'Билет судьбы 🎟',
+                description: 'Покупка билета судьбы для входа в Подземелье Аида',
+                payload: payload,
+                provider_token: "",
+                currency: 'XTR',
+                prices: [{ label: '1 билет судьбы', amount: HADES_TICKET_PRICE }]
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.ok && data.result) {
+            setPaymentStatus('Ожидание оплаты...');
+            
+            if (TelegramWebApp && TelegramWebApp.openInvoice) {
+                TelegramWebApp.openInvoice(data.result, async (status) => {
+                    if (status === 'paid') {
+                        setPaymentStatus('✅ Билет куплен!');
+                        setTimeout(() => setPaymentStatus(''), 3000);
+                    } else if (status === 'cancelled') {
+                        setPaymentStatus('❌ Отменено');
+                        setTimeout(() => setPaymentStatus(''), 3000);
                     }
-                } catch (e) {
-                    setPaymentStatus('❌ Ошибка');
-                    setTimeout(() => setPaymentStatus(''), 3000);
-                }
-            };
+                });
+            } else {
+                window.open(data.result, '_blank');
+            }
+        }
+    } catch (e) {
+        setPaymentStatus('❌ Ошибка');
+        setTimeout(() => setPaymentStatus(''), 3000);
+    }
+};
 
             const enterHadesGame = () => {
                 if (fateTickets < 1) {
@@ -1886,3 +1870,4 @@
     </script>
 </body>
 </html>
+
