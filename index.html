@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Step By Step Game</title>
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
@@ -118,9 +120,14 @@
         const TelegramWebApp = window.Telegram?.WebApp;
         const ADMIN_WALLET = 'UQAWqaIPFSg81l9MlgAx0HBE9o3gpJMhk1dnyryKJXhWNHIc';
         const BOT_TOKEN = '8325421899:AAG9t3yS4WWiwasRoHb-nbr3a94S9tQfHys';
-
         const FLOWERS_UNLOCK_DATE = new Date('2026-03-08T09:30:00Z').getTime();
         const FLOWERS_PROMO_CODE = 'LIFEFLOWER';
+
+        // Инициализация Telegram WebApp для поддержки Stars
+        if (TelegramWebApp) {
+            TelegramWebApp.ready();
+            TelegramWebApp.expand();
+        }
 
         const INITIAL_CASES = {
             daily: { id: 'daily', name: 'Ежедневный', emoji: '🗓️', price: 0, color: 'from-cyan-400 to-teal-600', locked: false, isNew: true, freeCount: 1, type: 'special', lastOpened: 0 },
@@ -359,13 +366,13 @@
 
         const TON_RATES = [{ stars: 50, ton: 0.6 }, { stars: 250, ton: 3 }, { stars: 500, ton: 6 }, { stars: 1000, ton: 12 }];
         
-        // Обновленные пакеты звезд - цена в звездах = количество звезд (1:1 для XTR)
+        // Обновленные пакеты звезд - цена в звездах Telegram для покупки (1:1)
         const STARS_PACKAGES = [
-            { stars: 50, price: 50 }, 
-            { stars: 100, price: 100 }, 
-            { stars: 250, price: 250 }, 
-            { stars: 500, price: 500 }, 
-            { stars: 1000, price: 1000 }
+            { stars: 50, price: 50, displayPrice: '50 ⭐️' }, 
+            { stars: 100, price: 100, displayPrice: '100 ⭐️' }, 
+            { stars: 250, price: 250, displayPrice: '250 ⭐️' }, 
+            { stars: 500, price: 500, displayPrice: '500 ⭐️' }, 
+            { stars: 1000, price: 1000, displayPrice: '1000 ⭐️' }
         ];
 
         const HADES_TICKET_PRICE = 5;
@@ -689,6 +696,9 @@
                     // Для покупки звезд используем XTR валюту и пустой provider_token
                     const payload = `stars_${user.id}_${pkg.stars}_${Date.now()}`;
                     
+                    // Сумма в звездах - для XTR это целое количество звезд
+                    const starAmount = Math.floor(pkg.price);
+                    
                     const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/createInvoiceLink`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -698,55 +708,64 @@
                             payload: payload,
                             provider_token: "", // ПУСТАЯ строка для Telegram Stars
                             currency: 'XTR',
-                            prices: [{ label: `${pkg.stars} звёзд`, amount: pkg.price }]
+                            prices: [{ label: `${pkg.stars} звёзд`, amount: starAmount }],
+                            need_name: false,
+                            need_phone_number: false,
+                            need_email: false,
+                            need_shipping_address: false,
+                            is_flexible: false
                         })
                     });
                     
                     const data = await response.json();
                     
-                    if (data.ok && data.result) {
-                        setPaymentStatus('Ожидание оплаты...');
-                        
-                        if (TelegramWebApp && TelegramWebApp.openInvoice) {
-                            // Открываем инвойс через WebApp
-                            TelegramWebApp.openInvoice(data.result, async (status) => {
+                    if (!data.ok || !data.result) {
+                        console.error('Failed to create invoice:', data);
+                        setPaymentStatus('❌ Ошибка: ' + (data.description || 'Не удалось создать счет'));
+                        setTimeout(() => setPaymentStatus(''), 5000);
+                        return;
+                    }
+                    
+                    setPaymentStatus('Ожидание оплаты...');
+                    
+                    if (TelegramWebApp && TelegramWebApp.openInvoice) {
+                        // Открываем инвойс через WebApp
+                        const invoiceStatus = await new Promise((resolve) => {
+                            TelegramWebApp.openInvoice(data.result, (status) => {
                                 console.log('Invoice status:', status);
-                                
-                                if (status === 'paid') {
-                                    // Начисляем звезды
-                                    const nb = balance + pkg.stars;
-                                    const nd = totalDeposits + pkg.stars;
-                                    setBalance(nb);
-                                    setTotalDeposits(nd);
-                                    await db.ref(`users/${user.id}`).update({ 
-                                        balance: nb, 
-                                        totalDeposits: nd 
-                                    });
-                                    checkDepositTasks(nd, pkg.stars);
-                                    setPaymentStatus(`✅ Зачислено ${pkg.stars} звёзд!`);
-                                    setTimeout(() => setPaymentStatus(''), 3000);
-                                } else if (status === 'cancelled') {
-                                    setPaymentStatus('❌ Оплата отменена');
-                                    setTimeout(() => setPaymentStatus(''), 3000);
-                                } else if (status === 'failed') {
-                                    setPaymentStatus('❌ Ошибка оплаты');
-                                    setTimeout(() => setPaymentStatus(''), 3000);
-                                }
+                                resolve(status);
                             });
-                        } else {
-                            // Fallback: открываем ссылку в новом окне
-                            window.open(data.result, '_blank');
-                            setPaymentStatus('Откройте счет в Telegram. После оплаты обновите страницу.');
+                        });
+                        
+                        if (invoiceStatus === 'paid') {
+                            // Начисляем звезды
+                            const nb = balance + pkg.stars;
+                            const nd = totalDeposits + pkg.stars;
+                            setBalance(nb);
+                            setTotalDeposits(nd);
+                            await db.ref(`users/${user.id}`).update({ 
+                                balance: nb, 
+                                totalDeposits: nd 
+                            });
+                            checkDepositTasks(nd, pkg.stars);
+                            setPaymentStatus(`✅ Зачислено ${pkg.stars} звёзд!`);
+                            setTimeout(() => setPaymentStatus(''), 3000);
+                        } else if (invoiceStatus === 'cancelled') {
+                            setPaymentStatus('❌ Оплата отменена');
+                            setTimeout(() => setPaymentStatus(''), 3000);
+                        } else if (invoiceStatus === 'failed') {
+                            setPaymentStatus('❌ Ошибка оплаты');
+                            setTimeout(() => setPaymentStatus(''), 3000);
                         }
                     } else {
-                        console.error('Failed to create invoice:', data);
-                        setPaymentStatus('❌ Ошибка создания счета');
-                        setTimeout(() => setPaymentStatus(''), 3000);
+                        // Fallback: открываем ссылку в браузере
+                        window.open(data.result, '_blank');
+                        setPaymentStatus('Откройте счет в Telegram. После оплаты обновите страницу.');
                     }
                 } catch (e) {
                     console.error('Payment error:', e);
                     setPaymentStatus('❌ Ошибка: ' + e.message);
-                    setTimeout(() => setPaymentStatus(''), 3000);
+                    setTimeout(() => setPaymentStatus(''), 5000);
                 }
             };
 
@@ -766,35 +785,54 @@
                             payload: payload,
                             provider_token: "", // ПУСТАЯ строка для Telegram Stars
                             currency: 'XTR',
-                            prices: [{ label: '1 билет судьбы', amount: HADES_TICKET_PRICE }]
+                            prices: [{ label: '1 билет судьбы', amount: HADES_TICKET_PRICE }],
+                            need_name: false,
+                            need_phone_number: false,
+                            need_email: false,
+                            need_shipping_address: false
                         })
                     });
                     
                     const data = await response.json();
                     
-                    if (data.ok && data.result) {
-                        setPaymentStatus('Ожидание оплаты...');
-                        
-                        if (TelegramWebApp && TelegramWebApp.openInvoice) {
-                            TelegramWebApp.openInvoice(data.result, async (status) => {
-                                if (status === 'paid') {
-                                    const nt = fateTickets + 1;
-                                    setFateTickets(nt);
-                                    await db.ref(`users/${user.id}/fateTickets`).set(nt);
-                                    setPaymentStatus('✅ Билет куплен!');
-                                    setTimeout(() => setPaymentStatus(''), 3000);
-                                } else if (status === 'cancelled') {
-                                    setPaymentStatus('❌ Отменено');
-                                    setTimeout(() => setPaymentStatus(''), 3000);
-                                }
+                    if (!data.ok || !data.result) {
+                        console.error('Failed to create invoice:', data);
+                        setPaymentStatus('❌ Ошибка: ' + (data.description || 'Не удалось создать счет'));
+                        setTimeout(() => setPaymentStatus(''), 5000);
+                        return;
+                    }
+                    
+                    setPaymentStatus('Ожидание оплаты...');
+                    
+                    if (TelegramWebApp && TelegramWebApp.openInvoice) {
+                        const invoiceStatus = await new Promise((resolve) => {
+                            TelegramWebApp.openInvoice(data.result, (status) => {
+                                console.log('Invoice status:', status);
+                                resolve(status);
                             });
-                        } else {
-                            window.open(data.result, '_blank');
+                        });
+                        
+                        if (invoiceStatus === 'paid') {
+                            const nt = fateTickets + 1;
+                            setFateTickets(nt);
+                            await db.ref(`users/${user.id}/fateTickets`).set(nt);
+                            setPaymentStatus('✅ Билет куплен!');
+                            setTimeout(() => setPaymentStatus(''), 3000);
+                        } else if (invoiceStatus === 'cancelled') {
+                            setPaymentStatus('❌ Отменено');
+                            setTimeout(() => setPaymentStatus(''), 3000);
+                        } else if (invoiceStatus === 'failed') {
+                            setPaymentStatus('❌ Ошибка оплаты');
+                            setTimeout(() => setPaymentStatus(''), 3000);
                         }
+                    } else {
+                        window.open(data.result, '_blank');
+                        setPaymentStatus('Откройте счет в Telegram. После оплаты обновите страницу.');
                     }
                 } catch (e) {
-                    setPaymentStatus('❌ Ошибка');
-                    setTimeout(() => setPaymentStatus(''), 3000);
+                    console.error('Payment error:', e);
+                    setPaymentStatus('❌ Ошибка: ' + e.message);
+                    setTimeout(() => setPaymentStatus(''), 5000);
                 }
             };
 
@@ -1213,7 +1251,7 @@
 
             if (currentGame?.type === 'gerakl') {
                 return (
-                    <div className="min-h-screen bg-gradient-to-b from-red-900 via-orange-900 to-red-800 pb-4" style={{ backgroundImage: "url('gerakl.jpg')", backgroundSize: 'cover', backgroundPosition: 'center', backgroundBlendMode: 'overlay' }}>
+                    <div className="min-h-screen bg-gradient-to-b from-red-900 via-orange-900 to-red-800 pb-4" style={{ backgroundImage: `url('./gerakl.jpg')`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundBlendMode: 'overlay' }}>
                         <div className="max-w-lg mx-auto p-3">
                             <div className="flex justify-between items-center mb-3">
                                 <h1 className="text-xl font-bold">🪬 13 Подвиг Геракла 🌊</h1>
@@ -1264,7 +1302,7 @@
 
             if (currentGame?.type === 'hades') {
                 return (
-                    <div className="min-h-screen bg-gradient-to-b from-gray-900 via-red-900 to-black pb-4" style={{ backgroundImage: "url('evil.jpg')", backgroundSize: 'cover', backgroundPosition: 'center', backgroundBlendMode: 'overlay' }}>
+                    <div className="min-h-screen bg-gradient-to-b from-gray-900 via-red-900 to-black pb-4" style={{ backgroundImage: `url('./evil.jpg')`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundBlendMode: 'overlay' }}>
                         <div className="max-w-lg mx-auto p-3">
                             <div className="flex justify-between items-center mb-3">
                                 <h1 className="text-xl font-bold text-red-400 hades-neon olympus-font">🔥 Подземелье Аида 🔥</h1>
@@ -1328,7 +1366,7 @@
                                     <div className="door-grid mb-4">
                                         {hadesDoors.map((opened, i) => (
                                             <div key={i} onClick={() => openHadesDoor(i)} className={`door ${opened ? 'opened' : ''}`}>
-                                                {!opened && <img src="door.jpg" alt="Door" className="door-image" />}
+                                                {!opened && <img src="./door.jpg" alt="Door" className="door-image" />}
                                                 {opened && hadesDoorRewards[i] && (
                                                     <>
                                                         <span className="reward-emoji">{hadesDoorRewards[i].emoji}</span>
@@ -1379,7 +1417,7 @@
 
             if (currentGame?.type === 'flower_bank') {
                 return (
-                    <div className="min-h-screen bg-gradient-to-b from-pink-900 via-rose-900 to-pink-800 pb-4" style={{ backgroundImage: "url('roza.jpg')", backgroundSize: 'cover', backgroundPosition: 'center', backgroundBlendMode: 'overlay' }}>
+                    <div className="min-h-screen bg-gradient-to-b from-pink-900 via-rose-900 to-pink-800 pb-4" style={{ backgroundImage: `url('./roza.jpg')`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundBlendMode: 'overlay' }}>
                         <div className="max-w-lg mx-auto p-3">
                             <div className="flex justify-between items-center mb-3">
                                 <h1 className="text-xl font-bold text-pink-300">💐 Банк цветов 💐</h1>
@@ -1667,17 +1705,17 @@
                         {currentScreen === 'games' && (
                             <div>
                                 <h2 className="text-2xl font-bold mb-4 text-center">🎮 Игры</h2>
-                                <div className="glass rounded-xl p-4 border border-yellow-500/30 mb-3" style={{ backgroundImage: "url('gerakl.jpg')", backgroundSize: 'cover', backgroundPosition: 'center', backgroundBlendMode: 'overlay' }}>
+                                <div className="glass rounded-xl p-4 border border-yellow-500/30 mb-3" style={{ backgroundImage: `url('./gerakl.jpg')`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundBlendMode: 'overlay' }}>
                                     <h3 className="text-xl font-bold mb-1 text-center text-yellow-300">🪬 13 Подвиг Геракла 🌊</h3>
                                     <p className="text-yellow-400 text-center text-xs mb-3">Пройди 10 раундов и получи сундук 📦</p>
                                     <button onClick={() => setCurrentGame({ type: 'gerakl' })} className="w-full bg-gradient-to-r from-yellow-600 to-orange-600 py-3 rounded-xl font-bold text-sm mobile-btn">Войти</button>
                                 </div>
-                                <div className="glass rounded-xl p-4 border border-red-500/30 mb-3" style={{ backgroundImage: "url('evil.jpg')", backgroundSize: 'cover', backgroundPosition: 'center', backgroundBlendMode: 'overlay' }}>
+                                <div className="glass rounded-xl p-4 border border-red-500/30 mb-3" style={{ backgroundImage: `url('./evil.jpg')`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundBlendMode: 'overlay' }}>
                                     <h3 className="text-xl font-bold mb-1 text-center text-red-300">🔥 Подземелье Аида 🔥</h3>
                                     <p className="text-red-400 text-center text-xs mb-3">Открой дверь судьбы 🎟</p>
                                     <button onClick={() => setCurrentGame({ type: 'hades' })} className="w-full bg-gradient-to-r from-red-600 to-orange-600 py-3 rounded-xl font-bold text-sm mobile-btn">Войти</button>
                                 </div>
-                                <div className="glass rounded-xl p-4 border border-pink-500/30" style={{ backgroundImage: "url('roza.jpg')", backgroundSize: 'cover', backgroundPosition: 'center', backgroundBlendMode: 'overlay' }}>
+                                <div className="glass rounded-xl p-4 border border-pink-500/30" style={{ backgroundImage: `url('./roza.jpg')`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundBlendMode: 'overlay' }}>
                                     <h3 className="text-xl font-bold mb-1 text-center text-pink-300">💐 Банк цветов 💐</h3>
                                     <p className="text-pink-400 text-center text-xs mb-3">Временное событие! 🌸</p>
                                     <button onClick={() => setCurrentGame({ type: 'flower_bank' })} className="w-full bg-gradient-to-r from-pink-600 to-rose-600 py-3 rounded-xl font-bold text-sm mobile-btn">
@@ -1688,7 +1726,7 @@
                         )}
 
                         {currentScreen === 'events' && (
-                            <div className="min-h-[70vh] rounded-xl p-4 relative" style={{ backgroundImage: "url('olimp.jpg')", backgroundSize: 'cover', backgroundPosition: 'center' }}>
+                            <div className="min-h-[70vh] rounded-xl p-4 relative" style={{ backgroundImage: `url('./olimp.jpg')`, backgroundSize: 'cover', backgroundPosition: 'center' }}>
                                 <div className="absolute inset-0 bg-black/60 rounded-xl"></div>
                                 <div className="relative z-10 flex items-center justify-center h-full min-h-[60vh]">
                                     <h2 className="soon-text olympus-font">Скоро...</h2>
@@ -1840,12 +1878,12 @@
                                     <span className="text-yellow-400 font-bold text-sm">5 ⭐️</span>
                                 </button>
 
-                                <p className="text-xs text-gray-400 text-center mb-2">⭐️ Telegram Stars</p>
+                                <p className="text-xs text-gray-400 text-center mb-2">⭐️ Telegram Stars - Купить звезды</p>
                                 <div className="space-y-2 mb-3">
                                     {STARS_PACKAGES.map(pkg => (
-                                        <button key={pkg.stars} onClick={() => buyStars(pkg)} className="w-full glass p-3 rounded-xl flex justify-between items-center hover:bg-white/10 border border-white/10">
-                                            <span className="font-bold text-yellow-400 text-sm">+{pkg.stars} ⭐️</span>
-                                            <span className="text-gray-300 text-xs">Купить</span>
+                                        <button key={pkg.stars} onClick={() => buyStars(pkg)} className="w-full glass p-3 rounded-xl flex justify-between items-center hover:bg-white/10 border border-yellow-500/30">
+                                            <span className="font-bold text-yellow-400 text-sm">+{pkg.stars} ⭐️ на баланс</span>
+                                            <span className="text-yellow-300 text-xs font-semibold">{pkg.displayPrice}</span>
                                         </button>
                                     ))}
                                 </div>
