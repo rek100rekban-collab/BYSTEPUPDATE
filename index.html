@@ -715,7 +715,7 @@
         if (data.ok && data.result) {
             setPaymentStatus('Ожидание оплаты...');
             
-            // Используем правильный метод для открытия инвойса в Telegram Web App
+            // Используем универсальный метод открытия инвойса
             if (TelegramWebApp && TelegramWebApp.openInvoice) {
                 TelegramWebApp.openInvoice(data.result, function(status) {
                     console.log('Invoice status:', status);
@@ -757,9 +757,15 @@
                     }
                 });
             } else {
-                // Фоллбэк: открываем в браузере если Web App не поддерживает
-                window.open(data.result, '_blank');
-                setPaymentStatus('Откройте счет в Telegram');
+                // Фоллбэк: открываем инвойс через mainButton или прямую ссылку
+                TelegramWebApp.MainButton.setText('Оплатить');
+                TelegramWebApp.MainButton.onClick(function() {
+                    TelegramWebApp.openLink(data.result);
+                    TelegramWebApp.MainButton.offClick();
+                    TelegramWebApp.MainButton.hide();
+                });
+                TelegramWebApp.MainButton.show();
+                setPaymentStatus('Нажмите кнопку для оплаты');
             }
         } else {
             console.error('Invoice creation failed:', data);
@@ -843,7 +849,15 @@
                     }
                 });
             } else {
-                window.open(data.result, '_blank');
+                // Фоллбэк: открываем инвойс через mainButton
+                TelegramWebApp.MainButton.setText('Оплатить билет');
+                TelegramWebApp.MainButton.onClick(function() {
+                    TelegramWebApp.openLink(data.result);
+                    TelegramWebApp.MainButton.offClick();
+                    TelegramWebApp.MainButton.hide();
+                });
+                TelegramWebApp.MainButton.show();
+                setPaymentStatus('Нажмите кнопку для оплаты');
             }
         } else {
             console.error('Invoice creation failed:', data);
