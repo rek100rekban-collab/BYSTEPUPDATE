@@ -49,10 +49,10 @@
         .fullscreen-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 100; overflow-y: auto; }
         .daily-timer { color: #4ade80; font-family: monospace; font-weight: bold; font-size: 14px; background: rgba(0,0,0,0.6); padding: 2px 8px; border-radius: 6px; border: 1px solid #22c55e; animation: greenGlow 2s infinite; display: inline-block; }
         .cases-timer { color: #fbbf24; font-family: monospace; text-shadow: 0 0 5px #fbbf24; animation: yellowGlow 2s infinite; }
-        .case-cardboard { background: linear-gradient(135deg, #8B4513 0%, #D2691E 50%, #8B4513 100%); border: 3px solid #A0522D; }
-        .case-collector { background: linear-gradient(135deg, #DC143C 0%, #FF1493 50%, #8B008B 100%); border: 3px solid #FFD700; }
-        .case-flowers { background: linear-gradient(135deg, #ff69b4 0%, #ff1493 50%, #c71585 100%); border: 3px solid #ffb6c1; box-shadow: 0 0 20px rgba(255,105,180,0.5); }
-        .events-tab-active { background: linear-gradient(135deg, rgba(251,191,36,0.3), rgba(245,158,11,0.2)); border: 2px solid rgba(251,191,36,0.6); box-shadow: 0 0 20px rgba(251,191,36,0.4); }
+        .case-cardboard { background: linear-gradient(135deg, #8B4513 0%, #D2691E 50%, #8B4513 100%), url('./case.jpg'); background-size: cover; background-position: center; border: 3px solid #A0522D; }
+        .case-collector { background: linear-gradient(135deg, rgba(220,20,60,0.8) 0%, rgba(255,20,147,0.8) 50%, rgba(139,0,139,0.8) 100%), url('./case.jpg'); background-size: cover; background-position: center; border: 3px solid #FFD700; }
+        .case-flowers { background: linear-gradient(135deg, rgba(255,105,180,0.8) 0%, rgba(255,20,147,0.8) 50%, rgba(199,21,133,0.8) 100%), url('./roza.jpg'); background-size: cover; background-position: center; border: 3px solid #ffb6c1; box-shadow: 0 0 20px rgba(255,105,180,0.5); }
+        .events-tab-active { background: linear-gradient(135deg, rgba(251,191,36,0.3), rgba(245,158,11,0.2)), url('./event.jpg'); background-size: cover; background-position: center; border: 2px solid rgba(251,191,36,0.6); box-shadow: 0 0 20px rgba(251,191,36,0.4); }
         .roulette-container { position: relative; width: 100%; height: 140px; overflow: hidden; background: rgba(0,0,0,0.4); border-radius: 16px; border: 2px solid rgba(255,255,255,0.1); margin: 16px 0; }
         .roulette-inner { display: flex; position: absolute; left: 0; top: 10px; transition: transform 6.5s cubic-bezier(0.1, 0, 0.1, 1); will-change: transform; }
         .roulette-item { width: 110px; height: 110px; flex-shrink: 0; margin: 0 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05)); border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); }
@@ -116,6 +116,9 @@
         if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
         const TelegramWebApp = window.Telegram?.WebApp;
+        if (TelegramWebApp) {
+            TelegramWebApp.ready();
+        }
         const ADMIN_WALLET = 'UQAWqaIPFSg81l9MlgAx0HBE9o3gpJMhk1dnyryKJXhWNHIc';
         const BOT_TOKEN = '8325421899:AAG9t3yS4WWiwasRoHb-nbr3a94S9tQfHys';
 
@@ -697,7 +700,13 @@
                 payload: payload,
                 provider_token: "",
                 currency: 'XTR',
-                prices: [{ label: `${pkg.stars} stars`, amount: pkg.stars }]
+                prices: [{ label: `${pkg.stars} stars`, amount: pkg.stars }],
+                need_name: false,
+                need_phone_number: false,
+                need_email: false,
+                need_shipping_address: false,
+                send_phone_number_to_provider: false,
+                send_email_to_provider: false
             })
         });
         
@@ -706,34 +715,61 @@
         if (data.ok && data.result) {
             setPaymentStatus('Ожидание оплаты...');
             
+            // Используем правильный метод для открытия инвойса в Telegram Web App
             if (TelegramWebApp && TelegramWebApp.openInvoice) {
-                TelegramWebApp.openInvoice(data.result, async (status) => {
+                TelegramWebApp.openInvoice(data.result, function(status) {
                     console.log('Invoice status:', status);
                     
                     if (status === 'paid') {
                         setPaymentStatus('✅ Оплата подтверждена! Звёзды начислятся автоматически...');
-                        setTimeout(() => setPaymentStatus(''), 5000);
+                        // Принудительно обновляем баланс после успешной оплаты
+                        setTimeout(async () => {
+                            try {
+                                const snap = await db.ref(`users/${user.id}`).once('value');
+                                const userData = snap.val() || {};
+                                setBalance(userData.balance || 0);
+                                setPaymentStatus('');
+                                // Закрываем окно оплаты
+                                if (TelegramWebApp && TelegramWebApp.close) {
+                                    TelegramWebApp.close();
+                                }
+                            } catch (e) {
+                                console.error('Error updating balance:', e);
+                                setPaymentStatus('');
+                            }
+                        }, 1500);
                     } else if (status === 'cancelled') {
                         setPaymentStatus('❌ Оплата отменена');
-                        setTimeout(() => setPaymentStatus(''), 3000);
+                        setTimeout(() => {
+                            setPaymentStatus('');
+                            if (TelegramWebApp && TelegramWebApp.close) {
+                                TelegramWebApp.close();
+                            }
+                        }, 2000);
                     } else if (status === 'failed') {
                         setPaymentStatus('❌ Ошибка оплаты');
-                        setTimeout(() => setPaymentStatus(''), 3000);
+                        setTimeout(() => {
+                            setPaymentStatus('');
+                            if (TelegramWebApp && TelegramWebApp.close) {
+                                TelegramWebApp.close();
+                            }
+                        }, 2000);
                     }
                 });
             } else {
+                // Фоллбэк: открываем в браузере если Web App не поддерживает
                 window.open(data.result, '_blank');
                 setPaymentStatus('Откройте счет в Telegram');
             }
         } else {
             console.error('Invoice creation failed:', data);
-            setPaymentStatus('❌ Ошибка создания счета');
-            setTimeout(() => setPaymentStatus(''), 3000);
+            setPaymentStatus('❌ Ошибка создания счета: ' + (data.description || 'Неизвестная ошибка'));
+            setTimeout(() => setPaymentStatus(''), 5000);
         }
     } catch (e) {
         console.error('Payment error:', e);
         setPaymentStatus('❌ Ошибка: ' + e.message);
-        setTimeout(() => setPaymentStatus(''), 3000);
+        setTimeout(() => setPaymentStatus(''), 5000);
     }
 };
 
@@ -753,7 +789,13 @@
                 payload: payload,
                 provider_token: "",
                 currency: 'XTR',
-                prices: [{ label: '1 билет судьбы', amount: HADES_TICKET_PRICE }]
+                prices: [{ label: '1 билет судьбы', amount: HADES_TICKET_PRICE }],
+                need_name: false,
+                need_phone_number: false,
+                need_email: false,
+                need_shipping_address: false,
+                send_phone_number_to_provider: false,
+                send_email_to_provider: false
             })
         });
         
@@ -763,22 +805,54 @@
             setPaymentStatus('Ожидание оплаты...');
             
             if (TelegramWebApp && TelegramWebApp.openInvoice) {
-                TelegramWebApp.openInvoice(data.result, async (status) => {
+                TelegramWebApp.openInvoice(data.result, function(status) {
                     if (status === 'paid') {
                         setPaymentStatus('✅ Билет куплен!');
-                        setTimeout(() => setPaymentStatus(''), 3000);
+                        // Обновляем количество билетов после успешной оплаты
+                        setTimeout(async () => {
+                            try {
+                                const snap = await db.ref(`users/${user.id}`).once('value');
+                                const userData = snap.val() || {};
+                                setFateTickets(userData.fateTickets || 0);
+                                setPaymentStatus('');
+                                // Закрываем окно оплаты
+                                if (TelegramWebApp && TelegramWebApp.close) {
+                                    TelegramWebApp.close();
+                                }
+                            } catch (e) {
+                                console.error('Error updating tickets:', e);
+                                setPaymentStatus('');
+                            }
+                        }, 1500);
                     } else if (status === 'cancelled') {
                         setPaymentStatus('❌ Отменено');
-                        setTimeout(() => setPaymentStatus(''), 3000);
+                        setTimeout(() => {
+                            setPaymentStatus('');
+                            if (TelegramWebApp && TelegramWebApp.close) {
+                                TelegramWebApp.close();
+                            }
+                        }, 2000);
+                    } else if (status === 'failed') {
+                        setPaymentStatus('❌ Ошибка оплаты');
+                        setTimeout(() => {
+                            setPaymentStatus('');
+                            if (TelegramWebApp && TelegramWebApp.close) {
+                                TelegramWebApp.close();
+                            }
+                        }, 2000);
                     }
                 });
             } else {
                 window.open(data.result, '_blank');
             }
+        } else {
+            console.error('Invoice creation failed:', data);
+            setPaymentStatus('❌ Ошибка создания счета: ' + (data.description || 'Неизвестная ошибка'));
+            setTimeout(() => setPaymentStatus(''), 5000);
         }
     } catch (e) {
-        setPaymentStatus('❌ Ошибка');
-        setTimeout(() => setPaymentStatus(''), 3000);
+        setPaymentStatus('❌ Ошибка: ' + e.message);
+        setTimeout(() => setPaymentStatus(''), 5000);
     }
 };
 
@@ -1197,7 +1271,7 @@
 
             if (currentGame?.type === 'gerakl') {
                 return (
-                    <div className="min-h-screen bg-gradient-to-b from-red-900 via-orange-900 to-red-800 pb-4" style={{ backgroundImage: "url('gerakl.jpg')", backgroundSize: 'cover', backgroundPosition: 'center', backgroundBlendMode: 'overlay' }}>
+                    <div className="min-h-screen bg-gradient-to-b from-red-900 via-orange-900 to-red-800 pb-4" style={{ backgroundImage: "url('./gerakl.jpg')", backgroundSize: 'cover', backgroundPosition: 'center', backgroundBlendMode: 'overlay' }}>
                         <div className="max-w-lg mx-auto p-3">
                             <div className="flex justify-between items-center mb-3">
                                 <h1 className="text-xl font-bold">🪬 13 Подвиг Геракла 🌊</h1>
@@ -1248,7 +1322,7 @@
 
             if (currentGame?.type === 'hades') {
                 return (
-                    <div className="min-h-screen bg-gradient-to-b from-gray-900 via-red-900 to-black pb-4" style={{ backgroundImage: "url('evil.jpg')", backgroundSize: 'cover', backgroundPosition: 'center', backgroundBlendMode: 'overlay' }}>
+                    <div className="min-h-screen bg-gradient-to-b from-gray-900 via-red-900 to-black pb-4" style={{ backgroundImage: "url('./evil.jpg')", backgroundSize: 'cover', backgroundPosition: 'center', backgroundBlendMode: 'overlay' }}>
                         <div className="max-w-lg mx-auto p-3">
                             <div className="flex justify-between items-center mb-3">
                                 <h1 className="text-xl font-bold text-red-400 hades-neon olympus-font">🔥 Подземелье Аида 🔥</h1>
@@ -1312,7 +1386,7 @@
                                     <div className="door-grid mb-4">
                                         {hadesDoors.map((opened, i) => (
                                             <div key={i} onClick={() => openHadesDoor(i)} className={`door ${opened ? 'opened' : ''}`}>
-                                                {!opened && <img src="door.jpg" alt="Door" className="door-image" />}
+                                                {!opened && <img src="./door.jpg" alt="Door" className="door-image" />}
                                                 {opened && hadesDoorRewards[i] && (
                                                     <>
                                                         <span className="reward-emoji">{hadesDoorRewards[i].emoji}</span>
@@ -1363,7 +1437,7 @@
 
             if (currentGame?.type === 'flower_bank') {
                 return (
-                    <div className="min-h-screen bg-gradient-to-b from-pink-900 via-rose-900 to-pink-800 pb-4" style={{ backgroundImage: "url('roza.jpg')", backgroundSize: 'cover', backgroundPosition: 'center', backgroundBlendMode: 'overlay' }}>
+                    <div className="min-h-screen bg-gradient-to-b from-pink-900 via-rose-900 to-pink-800 pb-4" style={{ backgroundImage: "url('./roza.jpg')", backgroundSize: 'cover', backgroundPosition: 'center', backgroundBlendMode: 'overlay' }}>
                         <div className="max-w-lg mx-auto p-3">
                             <div className="flex justify-between items-center mb-3">
                                 <h1 className="text-xl font-bold text-pink-300">💐 Банк цветов 💐</h1>
@@ -1651,17 +1725,17 @@
                         {currentScreen === 'games' && (
                             <div>
                                 <h2 className="text-2xl font-bold mb-4 text-center">🎮 Игры</h2>
-                                <div className="glass rounded-xl p-4 border border-yellow-500/30 mb-3" style={{ backgroundImage: "url('gerakl.jpg')", backgroundSize: 'cover', backgroundPosition: 'center', backgroundBlendMode: 'overlay' }}>
+                                <div className="glass rounded-xl p-4 border border-yellow-500/30 mb-3" style={{ backgroundImage: "url('./gerakl.jpg')", backgroundSize: 'cover', backgroundPosition: 'center', backgroundBlendMode: 'overlay' }}>
                                     <h3 className="text-xl font-bold mb-1 text-center text-yellow-300">🪬 13 Подвиг Геракла 🌊</h3>
                                     <p className="text-yellow-400 text-center text-xs mb-3">Пройди 10 раундов и получи сундук 📦</p>
                                     <button onClick={() => setCurrentGame({ type: 'gerakl' })} className="w-full bg-gradient-to-r from-yellow-600 to-orange-600 py-3 rounded-xl font-bold text-sm mobile-btn">Войти</button>
                                 </div>
-                                <div className="glass rounded-xl p-4 border border-red-500/30 mb-3" style={{ backgroundImage: "url('evil.jpg')", backgroundSize: 'cover', backgroundPosition: 'center', backgroundBlendMode: 'overlay' }}>
+                                <div className="glass rounded-xl p-4 border border-red-500/30 mb-3" style={{ backgroundImage: "url('./evil.jpg')", backgroundSize: 'cover', backgroundPosition: 'center', backgroundBlendMode: 'overlay' }}>
                                     <h3 className="text-xl font-bold mb-1 text-center text-red-300">🔥 Подземелье Аида 🔥</h3>
                                     <p className="text-red-400 text-center text-xs mb-3">Открой дверь судьбы 🎟</p>
                                     <button onClick={() => setCurrentGame({ type: 'hades' })} className="w-full bg-gradient-to-r from-red-600 to-orange-600 py-3 rounded-xl font-bold text-sm mobile-btn">Войти</button>
                                 </div>
-                                <div className="glass rounded-xl p-4 border border-pink-500/30" style={{ backgroundImage: "url('roza.jpg')", backgroundSize: 'cover', backgroundPosition: 'center', backgroundBlendMode: 'overlay' }}>
+                                <div className="glass rounded-xl p-4 border border-pink-500/30" style={{ backgroundImage: "url('./roza.jpg')", backgroundSize: 'cover', backgroundPosition: 'center', backgroundBlendMode: 'overlay' }}>
                                     <h3 className="text-xl font-bold mb-1 text-center text-pink-300">💐 Банк цветов 💐</h3>
                                     <p className="text-pink-400 text-center text-xs mb-3">Временное событие! 🌸</p>
                                     <button onClick={() => setCurrentGame({ type: 'flower_bank' })} className="w-full bg-gradient-to-r from-pink-600 to-rose-600 py-3 rounded-xl font-bold text-sm mobile-btn">
@@ -1672,7 +1746,7 @@
                         )}
 
                         {currentScreen === 'events' && (
-                            <div className="min-h-[70vh] rounded-xl p-4 relative" style={{ backgroundImage: "url('olimp.jpg')", backgroundSize: 'cover', backgroundPosition: 'center' }}>
+                            <div className="min-h-[70vh] rounded-xl p-4 relative" style={{ backgroundImage: "url('./olimp.jpg')", backgroundSize: 'cover', backgroundPosition: 'center' }}>
                                 <div className="absolute inset-0 bg-black/60 rounded-xl"></div>
                                 <div className="relative z-10 flex items-center justify-center h-full min-h-[60vh]">
                                     <h2 className="soon-text olympus-font">Скоро...</h2>
@@ -1718,7 +1792,7 @@
                         )}
 
                         {currentScreen === 'profile' && (
-                            <div>
+                            <div className="min-h-screen pb-20" style={{ backgroundImage: "url('./hero.jpg')", backgroundSize: 'cover', backgroundPosition: 'center', backgroundBlendMode: 'overlay' }}>
                                 <div className="glass rounded-xl p-2.5 mb-3 flex justify-between items-center">
                                     <span className="text-gray-400 text-sm">🟢 Онлайн:</span>
                                     <span className="font-bold text-green-400 text-sm">{onlineCount}</span>
