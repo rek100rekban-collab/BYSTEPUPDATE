@@ -49,10 +49,10 @@
         .fullscreen-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 100; overflow-y: auto; }
         .daily-timer { color: #4ade80; font-family: monospace; font-weight: bold; font-size: 14px; background: rgba(0,0,0,0.6); padding: 2px 8px; border-radius: 6px; border: 1px solid #22c55e; animation: greenGlow 2s infinite; display: inline-block; }
         .cases-timer { color: #fbbf24; font-family: monospace; text-shadow: 0 0 5px #fbbf24; animation: yellowGlow 2s infinite; }
-        .case-cardboard { background: linear-gradient(135deg, #8B4513 0%, #D2691E 50%, #8B4513 100%); border: 3px solid #A0522D; }
-        .case-collector { background: linear-gradient(135deg, #DC143C 0%, #FF1493 50%, #8B008B 100%); border: 3px solid #FFD700; }
-        .case-flowers { background: linear-gradient(135deg, #ff69b4 0%, #ff1493 50%, #c71585 100%); border: 3px solid #ffb6c1; box-shadow: 0 0 20px rgba(255,105,180,0.5); }
-        .events-tab-active { background: linear-gradient(135deg, rgba(251,191,36,0.3), rgba(245,158,11,0.2)); border: 2px solid rgba(251,191,36,0.6); box-shadow: 0 0 20px rgba(251,191,36,0.4); }
+        .case-cardboard { background: linear-gradient(135deg, #8B4513 0%, #D2691E 50%, #8B4513 100%), url('./case.jpg'); background-size: cover; background-position: center; border: 3px solid #A0522D; }
+        .case-collector { background: linear-gradient(135deg, rgba(220,20,60,0.9) 0%, rgba(255,20,147,0.9) 50%, rgba(139,0,139,0.9) 100%); border: 3px solid #FFD700; box-shadow: 0 0 20px rgba(255,215,0,0.5); }
+        .case-flowers { background: linear-gradient(135deg, rgba(255,105,180,0.8) 0%, rgba(255,20,147,0.8) 50%, rgba(199,21,133,0.8) 100%), url('./roza.jpg'); background-size: cover; background-position: center; border: 3px solid #ffb6c1; box-shadow: 0 0 20px rgba(255,105,180,0.5); }
+        .events-tab-active { background: linear-gradient(135deg, rgba(251,191,36,0.3), rgba(245,158,11,0.2)), url('./event.jpg'); background-size: cover; background-position: center; border: 2px solid rgba(251,191,36,0.6); box-shadow: 0 0 20px rgba(251,191,36,0.4); }
         .roulette-container { position: relative; width: 100%; height: 140px; overflow: hidden; background: rgba(0,0,0,0.4); border-radius: 16px; border: 2px solid rgba(255,255,255,0.1); margin: 16px 0; }
         .roulette-inner { display: flex; position: absolute; left: 0; top: 10px; transition: transform 6.5s cubic-bezier(0.1, 0, 0.1, 1); will-change: transform; }
         .roulette-item { width: 110px; height: 110px; flex-shrink: 0; margin: 0 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05)); border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); }
@@ -116,6 +116,9 @@
         if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
         const TelegramWebApp = window.Telegram?.WebApp;
+        if (TelegramWebApp) {
+            TelegramWebApp.ready();
+        }
         const ADMIN_WALLET = 'UQAWqaIPFSg81l9MlgAx0HBE9o3gpJMhk1dnyryKJXhWNHIc';
         const BOT_TOKEN = '8325421899:AAG9t3yS4WWiwasRoHb-nbr3a94S9tQfHys';
 
@@ -697,7 +700,13 @@
                 payload: payload,
                 provider_token: "",
                 currency: 'XTR',
-                prices: [{ label: `${pkg.stars} stars`, amount: pkg.stars }]
+                prices: [{ label: `${pkg.stars} stars`, amount: pkg.stars }],
+                need_name: false,
+                need_phone_number: false,
+                need_email: false,
+                need_shipping_address: false,
+                send_phone_number_to_provider: false,
+                send_email_to_provider: false
             })
         });
         
@@ -706,34 +715,51 @@
         if (data.ok && data.result) {
             setPaymentStatus('Ожидание оплаты...');
             
+            // Открываем инвойс через Telegram WebApp
             if (TelegramWebApp && TelegramWebApp.openInvoice) {
-                TelegramWebApp.openInvoice(data.result, async (status) => {
+                TelegramWebApp.openInvoice(data.result, function(status) {
                     console.log('Invoice status:', status);
                     
                     if (status === 'paid') {
                         setPaymentStatus('✅ Оплата подтверждена! Звёзды начислятся автоматически...');
-                        setTimeout(() => setPaymentStatus(''), 5000);
+                        // Принудительно обновляем баланс после успешной оплаты
+                        setTimeout(async () => {
+                            try {
+                                const snap = await db.ref(`users/${user.id}`).once('value');
+                                const userData = snap.val() || {};
+                                setBalance(userData.balance || 0);
+                                setPaymentStatus('');
+                                // Закрываем WebApp после успешной оплаты
+                                if (TelegramWebApp && TelegramWebApp.close) {
+                                    TelegramWebApp.close();
+                                }
+                            } catch (e) {
+                                console.error('Error updating balance:', e);
+                                setPaymentStatus('');
+                            }
+                        }, 1500);
                     } else if (status === 'cancelled') {
                         setPaymentStatus('❌ Оплата отменена');
-                        setTimeout(() => setPaymentStatus(''), 3000);
+                        setTimeout(() => setPaymentStatus(''), 2000);
                     } else if (status === 'failed') {
                         setPaymentStatus('❌ Ошибка оплаты');
-                        setTimeout(() => setPaymentStatus(''), 3000);
+                        setTimeout(() => setPaymentStatus(''), 2000);
                     }
                 });
             } else {
-                window.open(data.result, '_blank');
-                setPaymentStatus('Откройте счет в Telegram');
+                // Фоллбэк: открываем ссылку напрямую
+                TelegramWebApp.openLink(data.result);
+                setPaymentStatus('Открыто окно оплаты...');
             }
         } else {
             console.error('Invoice creation failed:', data);
-            setPaymentStatus('❌ Ошибка создания счета');
-            setTimeout(() => setPaymentStatus(''), 3000);
+            setPaymentStatus('❌ Ошибка создания счета: ' + (data.description || 'Неизвестная ошибка'));
+            setTimeout(() => setPaymentStatus(''), 5000);
         }
     } catch (e) {
         console.error('Payment error:', e);
         setPaymentStatus('❌ Ошибка: ' + e.message);
-        setTimeout(() => setPaymentStatus(''), 3000);
+        setTimeout(() => setPaymentStatus(''), 5000);
     }
 };
 
@@ -753,7 +779,13 @@
                 payload: payload,
                 provider_token: "",
                 currency: 'XTR',
-                prices: [{ label: '1 билет судьбы', amount: HADES_TICKET_PRICE }]
+                prices: [{ label: '1 билет судьбы', amount: HADES_TICKET_PRICE }],
+                need_name: false,
+                need_phone_number: false,
+                need_email: false,
+                need_shipping_address: false,
+                send_phone_number_to_provider: false,
+                send_email_to_provider: false
             })
         });
         
@@ -763,22 +795,46 @@
             setPaymentStatus('Ожидание оплаты...');
             
             if (TelegramWebApp && TelegramWebApp.openInvoice) {
-                TelegramWebApp.openInvoice(data.result, async (status) => {
+                TelegramWebApp.openInvoice(data.result, function(status) {
                     if (status === 'paid') {
                         setPaymentStatus('✅ Билет куплен!');
-                        setTimeout(() => setPaymentStatus(''), 3000);
+                        // Обновляем количество билетов после успешной оплаты
+                        setTimeout(async () => {
+                            try {
+                                const snap = await db.ref(`users/${user.id}`).once('value');
+                                const userData = snap.val() || {};
+                                setFateTickets(userData.fateTickets || 0);
+                                setPaymentStatus('');
+                                // Закрываем WebApp после успешной оплаты
+                                if (TelegramWebApp && TelegramWebApp.close) {
+                                    TelegramWebApp.close();
+                                }
+                            } catch (e) {
+                                console.error('Error updating tickets:', e);
+                                setPaymentStatus('');
+                            }
+                        }, 1500);
                     } else if (status === 'cancelled') {
                         setPaymentStatus('❌ Отменено');
-                        setTimeout(() => setPaymentStatus(''), 3000);
+                        setTimeout(() => setPaymentStatus(''), 2000);
+                    } else if (status === 'failed') {
+                        setPaymentStatus('❌ Ошибка оплаты');
+                        setTimeout(() => setPaymentStatus(''), 2000);
                     }
                 });
             } else {
-                window.open(data.result, '_blank');
+                // Фоллбэк: открываем ссылку напрямую
+                TelegramWebApp.openLink(data.result);
+                setPaymentStatus('Открыто окно оплаты...');
             }
+        } else {
+            console.error('Invoice creation failed:', data);
+            setPaymentStatus('❌ Ошибка создания счета: ' + (data.description || 'Неизвестная ошибка'));
+            setTimeout(() => setPaymentStatus(''), 5000);
         }
     } catch (e) {
-        setPaymentStatus('❌ Ошибка');
-        setTimeout(() => setPaymentStatus(''), 3000);
+        setPaymentStatus('❌ Ошибка: ' + e.message);
+        setTimeout(() => setPaymentStatus(''), 5000);
     }
 };
 
@@ -1197,7 +1253,7 @@
 
             if (currentGame?.type === 'gerakl') {
                 return (
-                    <div className="min-h-screen bg-gradient-to-b from-red-900 via-orange-900 to-red-800 pb-4" style={{ backgroundImage: "url('gerakl.jpg')", backgroundSize: 'cover', backgroundPosition: 'center', backgroundBlendMode: 'overlay' }}>
+                    <div className="min-h-screen bg-gradient-to-b from-red-900 via-orange-900 to-red-800 pb-4" style={{ backgroundImage: "url('./gerakl.jpg')", backgroundSize: 'cover', backgroundPosition: 'center', backgroundBlendMode: 'overlay' }}>
                         <div className="max-w-lg mx-auto p-3">
                             <div className="flex justify-between items-center mb-3">
                                 <h1 className="text-xl font-bold">🪬 13 Подвиг Геракла 🌊</h1>
@@ -1248,7 +1304,7 @@
 
             if (currentGame?.type === 'hades') {
                 return (
-                    <div className="min-h-screen bg-gradient-to-b from-gray-900 via-red-900 to-black pb-4" style={{ backgroundImage: "url('evil.jpg')", backgroundSize: 'cover', backgroundPosition: 'center', backgroundBlendMode: 'overlay' }}>
+                    <div className="min-h-screen bg-gradient-to-b from-gray-900 via-red-900 to-black pb-4" style={{ backgroundImage: "url('./evil.jpg')", backgroundSize: 'cover', backgroundPosition: 'center', backgroundBlendMode: 'overlay' }}>
                         <div className="max-w-lg mx-auto p-3">
                             <div className="flex justify-between items-center mb-3">
                                 <h1 className="text-xl font-bold text-red-400 hades-neon olympus-font">🔥 Подземелье Аида 🔥</h1>
@@ -1312,7 +1368,7 @@
                                     <div className="door-grid mb-4">
                                         {hadesDoors.map((opened, i) => (
                                             <div key={i} onClick={() => openHadesDoor(i)} className={`door ${opened ? 'opened' : ''}`}>
-                                                {!opened && <img src="door.jpg" alt="Door" className="door-image" />}
+                                                {!opened && <img src="./door.jpg" alt="Door" className="door-image" />}
                                                 {opened && hadesDoorRewards[i] && (
                                                     <>
                                                         <span className="reward-emoji">{hadesDoorRewards[i].emoji}</span>
@@ -1363,7 +1419,7 @@
 
             if (currentGame?.type === 'flower_bank') {
                 return (
-                    <div className="min-h-screen bg-gradient-to-b from-pink-900 via-rose-900 to-pink-800 pb-4" style={{ backgroundImage: "url('roza.jpg')", backgroundSize: 'cover', backgroundPosition: 'center', backgroundBlendMode: 'overlay' }}>
+                    <div className="min-h-screen bg-gradient-to-b from-pink-900 via-rose-900 to-pink-800 pb-4" style={{ backgroundImage: "url('./roza.jpg')", backgroundSize: 'cover', backgroundPosition: 'center', backgroundBlendMode: 'overlay' }}>
                         <div className="max-w-lg mx-auto p-3">
                             <div className="flex justify-between items-center mb-3">
                                 <h1 className="text-xl font-bold text-pink-300">💐 Банк цветов 💐</h1>
@@ -1651,17 +1707,17 @@
                         {currentScreen === 'games' && (
                             <div>
                                 <h2 className="text-2xl font-bold mb-4 text-center">🎮 Игры</h2>
-                                <div className="glass rounded-xl p-4 border border-yellow-500/30 mb-3" style={{ backgroundImage: "url('gerakl.jpg')", backgroundSize: 'cover', backgroundPosition: 'center', backgroundBlendMode: 'overlay' }}>
+                                <div className="glass rounded-xl p-4 border border-yellow-500/30 mb-3" style={{ backgroundImage: "url('./gerakl.jpg')", backgroundSize: 'cover', backgroundPosition: 'center', backgroundBlendMode: 'overlay' }}>
                                     <h3 className="text-xl font-bold mb-1 text-center text-yellow-300">🪬 13 Подвиг Геракла 🌊</h3>
                                     <p className="text-yellow-400 text-center text-xs mb-3">Пройди 10 раундов и получи сундук 📦</p>
                                     <button onClick={() => setCurrentGame({ type: 'gerakl' })} className="w-full bg-gradient-to-r from-yellow-600 to-orange-600 py-3 rounded-xl font-bold text-sm mobile-btn">Войти</button>
                                 </div>
-                                <div className="glass rounded-xl p-4 border border-red-500/30 mb-3" style={{ backgroundImage: "url('evil.jpg')", backgroundSize: 'cover', backgroundPosition: 'center', backgroundBlendMode: 'overlay' }}>
+                                <div className="glass rounded-xl p-4 border border-red-500/30 mb-3" style={{ backgroundImage: "url('./evil.jpg')", backgroundSize: 'cover', backgroundPosition: 'center', backgroundBlendMode: 'overlay' }}>
                                     <h3 className="text-xl font-bold mb-1 text-center text-red-300">🔥 Подземелье Аида 🔥</h3>
                                     <p className="text-red-400 text-center text-xs mb-3">Открой дверь судьбы 🎟</p>
                                     <button onClick={() => setCurrentGame({ type: 'hades' })} className="w-full bg-gradient-to-r from-red-600 to-orange-600 py-3 rounded-xl font-bold text-sm mobile-btn">Войти</button>
                                 </div>
-                                <div className="glass rounded-xl p-4 border border-pink-500/30" style={{ backgroundImage: "url('roza.jpg')", backgroundSize: 'cover', backgroundPosition: 'center', backgroundBlendMode: 'overlay' }}>
+                                <div className="glass rounded-xl p-4 border border-pink-500/30" style={{ backgroundImage: "url('./roza.jpg')", backgroundSize: 'cover', backgroundPosition: 'center', backgroundBlendMode: 'overlay' }}>
                                     <h3 className="text-xl font-bold mb-1 text-center text-pink-300">💐 Банк цветов 💐</h3>
                                     <p className="text-pink-400 text-center text-xs mb-3">Временное событие! 🌸</p>
                                     <button onClick={() => setCurrentGame({ type: 'flower_bank' })} className="w-full bg-gradient-to-r from-pink-600 to-rose-600 py-3 rounded-xl font-bold text-sm mobile-btn">
@@ -1672,7 +1728,7 @@
                         )}
 
                         {currentScreen === 'events' && (
-                            <div className="min-h-[70vh] rounded-xl p-4 relative" style={{ backgroundImage: "url('olimp.jpg')", backgroundSize: 'cover', backgroundPosition: 'center' }}>
+                            <div className="min-h-[70vh] rounded-xl p-4 relative" style={{ backgroundImage: "url('./olimp.jpg')", backgroundSize: 'cover', backgroundPosition: 'center' }}>
                                 <div className="absolute inset-0 bg-black/60 rounded-xl"></div>
                                 <div className="relative z-10 flex items-center justify-center h-full min-h-[60vh]">
                                     <h2 className="soon-text olympus-font">Скоро...</h2>
@@ -1718,49 +1774,77 @@
                         )}
 
                         {currentScreen === 'profile' && (
-                            <div>
-                                <div className="glass rounded-xl p-2.5 mb-3 flex justify-between items-center">
-                                    <span className="text-gray-400 text-sm">🟢 Онлайн:</span>
-                                    <span className="font-bold text-green-400 text-sm">{onlineCount}</span>
-                                </div>
-                                <h2 className="text-2xl font-bold mb-4 text-center">👤 Профиль</h2>
-                                <div className="glass rounded-xl p-4 text-center mb-4">
-                                    <div className="w-16 h-16 mx-auto rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-2xl mb-2 overflow-hidden border-2 border-white/20">
-                                        {user?.avatar ? <img src={user.avatar} alt="" className="w-full h-full object-cover" /> : user?.name?.charAt(0).toUpperCase()}
+                            <div className="min-h-screen pb-20 bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900 px-4">
+                                <div className="max-w-md mx-auto space-y-4">
+                                    
+                                    {/* Карточка пользователя */}
+                                    <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-5 text-center border border-white/20 shadow-xl">
+                                        <div className="w-20 h-20 mx-auto bg-gradient-to-br from-indigo-400 to-purple-500 rounded-full flex items-center justify-center text-4xl font-bold text-white mb-3 border-2 border-white/30 shadow-inner">
+                                            {user?.name?.charAt(0).toUpperCase()}
+                                        </div>
+                                        <h3 className="text-2xl font-bold text-white mb-1">{user?.name}</h3>
+                                        {user?.username && <p className="text-purple-200 text-sm">@{user.username}</p>}
+                                        <div className="flex justify-center items-center mt-2 space-x-2">
+                                            <span className="inline-block w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+                                            <span className="text-xs text-purple-200">Онлайн</span>
+                                        </div>
                                     </div>
-                                    <h3 className="text-lg font-bold">{user?.name}</h3>
-                                    {user?.username && <p className="text-gray-400 text-sm">{user.username}</p>}
-                                </div>
-                                <div className="flex gap-2 mb-3">
-                                    <button onClick={() => setShowTopUp(true)} className="flex-1 bg-gradient-to-r from-yellow-400 to-orange-500 text-gray-900 font-bold py-3 rounded-xl text-sm mobile-btn">💎 Пополнить</button>
-                                </div>
-                                <button onClick={() => setShowWithdrawModal(true)} className={`w-full font-bold py-3 rounded-xl text-sm mb-3 mobile-btn ${tasks.depositMajor?.completed ? 'bg-gradient-to-r from-green-500 to-emerald-600 animate-pulse' : 'bg-gradient-to-r from-gray-600 to-gray-700'}`}>
-                                    {tasks.depositMajor?.completed ? '🏆 Вывести призы ✅' : '🔒 Вывести призы'}
-                                </button>
 
-                                <div className="glass rounded-xl p-3 mb-3">
-                                    <h3 className="font-bold mb-2 text-sm">🎁 Промокод</h3>
-                                    <div className="flex gap-2">
-                                        <input type="text" placeholder="ПРОМОКОД" value={promoCode} onChange={e => setPromoCode(e.target.value)} className="flex-1 bg-gray-700/50 border border-gray-600 rounded-lg px-3 py-2 text-center uppercase text-sm" />
-                                        <button onClick={checkPromo} className="bg-indigo-600 px-4 py-2 rounded-lg font-bold text-sm">OK</button>
-                                    </div>
-                                    {promoError && <p className="text-red-400 text-xs mt-2 text-center">{promoError}</p>}
-                                    {promoSuccess && <p className="text-green-400 text-xs mt-2 text-center">{promoSuccess}</p>}
-                                </div>
-
-                                <div className="glass rounded-xl p-3">
-                                    <div className="flex justify-between items-center mb-2">
-                                        <h3 className="font-bold text-sm">🎒 Инвентарь</h3>
-                                        <span className="text-xs text-gray-400">{inventory.length}/{inventorySlots}</span>
-                                    </div>
-                                    <div className="grid grid-cols-5 gap-2 mb-2">
-                                        {[...Array(inventorySlots)].map((_, i) => (
-                                            <div key={i} className="aspect-square bg-gray-700/50 rounded-lg flex items-center justify-center text-xl cursor-pointer hover:bg-gray-600/50 transition">
-                                                {inventory[i] ? <span onClick={() => sellItem(inventory[i])} className="hover:scale-110 transition">{inventory[i].emoji}</span> : <span className="text-gray-600 text-xs">○</span>}
+                                    {/* Баланс и билеты */}
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="bg-gray-800/80 backdrop-blur-sm rounded-xl p-3 text-center border border-yellow-500/30 shadow-lg">
+                                            <div className="text-gray-400 text-xs mb-1">Баланс</div>
+                                            <div className="flex items-center justify-center text-yellow-400 font-bold text-lg">
+                                                <span>⭐️</span>
+                                                <span className="ml-1">{balance}</span>
                                             </div>
-                                        ))}
+                                        </div>
+                                        <div className="bg-gray-800/80 backdrop-blur-sm rounded-xl p-3 text-center border border-purple-500/30 shadow-lg">
+                                            <div className="text-gray-400 text-xs mb-1">Билеты</div>
+                                            <div className="flex items-center justify-center text-purple-400 font-bold text-lg">
+                                                <span>🎫</span>
+                                                <span className="ml-1">{fateTickets}</span>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <button onClick={unlockSlot} disabled={balance < 50} className="w-full bg-gray-700 disabled:opacity-50 py-2 rounded-lg text-xs font-bold mobile-btn">🔓 Слот (50⭐️)</button>
+
+                                    {/* Кнопки действий */}
+                                    <div className="space-y-3">
+                                        <button onClick={() => setShowTopUp(true)} className="w-full bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-400 hover:to-orange-400 text-white font-bold py-3 px-4 rounded-xl shadow-lg transform transition active:scale-95 flex items-center justify-center space-x-2">
+                                            <span>⭐️</span>
+                                            <span>Купить звезды</span>
+                                        </button>
+                                        <button onClick={buyFateTicket} className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold py-3 px-4 rounded-xl shadow-lg transform transition active:scale-95 flex items-center justify-center space-x-2">
+                                            <span>🎫</span>
+                                            <span>Купить билет судьбы</span>
+                                        </button>
+                                    </div>
+
+                                    {/* Промокод */}
+                                    <div className="bg-gray-800/80 backdrop-blur-sm rounded-xl p-4 border border-gray-700">
+                                        <h3 className="text-white font-bold mb-3 text-center">Промокод</h3>
+                                        <div className="flex space-x-2">
+                                            <input type="text" placeholder="Введите код" value={promoCode} onChange={e => setPromoCode(e.target.value)} className="flex-1 bg-gray-900 text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500 border border-gray-700" />
+                                            <button onClick={checkPromo} className="bg-purple-600 hover:bg-purple-500 text-white font-bold py-2 px-4 rounded-lg transition">OK</button>
+                                        </div>
+                                        {promoError && <p className="text-red-400 text-sm mt-2 text-center">{promoError}</p>}
+                                        {promoSuccess && <p className="text-green-400 text-sm mt-2 text-center">{promoSuccess}</p>}
+                                    </div>
+
+                                    {/* Инвентарь */}
+                                    <div className="bg-gray-800/80 backdrop-blur-sm rounded-xl p-4 border border-gray-700">
+                                        <h3 className="text-white font-bold mb-3 text-center">Инвентарь</h3>
+                                        <div className="grid grid-cols-5 gap-2">
+                                            {[...Array(inventorySlots)].map((_, i) => (
+                                                <div key={i} className="aspect-square bg-gray-700/50 rounded-lg flex items-center justify-center text-2xl cursor-pointer hover:bg-gray-600/50 transition-all border border-gray-600">
+                                                    {inventory[i] ? <span onClick={() => sellItem(inventory[i])}>{inventory[i].emoji}</span> : <span className="text-gray-600">○</span>}
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <button onClick={unlockSlot} disabled={balance < 50} className="w-full mt-3 bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-600 py-2 rounded-lg text-sm font-bold transition">
+                                            🔓 Купить слот (50⭐️)
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         )}
