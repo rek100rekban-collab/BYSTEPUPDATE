@@ -359,13 +359,13 @@
 
         const TON_RATES = [{ stars: 50, ton: 0.6 }, { stars: 250, ton: 3 }, { stars: 500, ton: 6 }, { stars: 1000, ton: 12 }];
         
-        // Обновленные пакеты звезд - цена в звездах = количество звезд (1:1 для XTR)
+        // Обновленные пакеты звезд - цена в звездах Telegram для покупки (1:1)
         const STARS_PACKAGES = [
-            { stars: 50, price: 50 }, 
-            { stars: 100, price: 100 }, 
-            { stars: 250, price: 250 }, 
-            { stars: 500, price: 500 }, 
-            { stars: 1000, price: 1000 }
+            { stars: 50, price: 50, displayPrice: '50 ⭐️' }, 
+            { stars: 100, price: 100, displayPrice: '100 ⭐️' }, 
+            { stars: 250, price: 250, displayPrice: '250 ⭐️' }, 
+            { stars: 500, price: 500, displayPrice: '500 ⭐️' }, 
+            { stars: 1000, price: 1000, displayPrice: '1000 ⭐️' }
         ];
 
         const HADES_TICKET_PRICE = 5;
@@ -689,6 +689,9 @@
                     // Для покупки звезд используем XTR валюту и пустой provider_token
                     const payload = `stars_${user.id}_${pkg.stars}_${Date.now()}`;
                     
+                    // Сумма в звездах - для XTR это целое количество звезд
+                    const starAmount = Math.floor(pkg.price);
+                    
                     const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/createInvoiceLink`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -698,55 +701,60 @@
                             payload: payload,
                             provider_token: "", // ПУСТАЯ строка для Telegram Stars
                             currency: 'XTR',
-                            prices: [{ label: `${pkg.stars} звёзд`, amount: pkg.price }]
+                            prices: [{ label: `${pkg.stars} звёзд`, amount: starAmount }],
+                            need_name: false,
+                            need_phone_number: false,
+                            need_email: false,
+                            need_shipping_address: false
                         })
                     });
                     
                     const data = await response.json();
                     
-                    if (data.ok && data.result) {
-                        setPaymentStatus('Ожидание оплаты...');
-                        
-                        if (TelegramWebApp && TelegramWebApp.openInvoice) {
-                            // Открываем инвойс через WebApp
-                            TelegramWebApp.openInvoice(data.result, async (status) => {
-                                console.log('Invoice status:', status);
-                                
-                                if (status === 'paid') {
-                                    // Начисляем звезды
-                                    const nb = balance + pkg.stars;
-                                    const nd = totalDeposits + pkg.stars;
-                                    setBalance(nb);
-                                    setTotalDeposits(nd);
-                                    await db.ref(`users/${user.id}`).update({ 
-                                        balance: nb, 
-                                        totalDeposits: nd 
-                                    });
-                                    checkDepositTasks(nd, pkg.stars);
-                                    setPaymentStatus(`✅ Зачислено ${pkg.stars} звёзд!`);
-                                    setTimeout(() => setPaymentStatus(''), 3000);
-                                } else if (status === 'cancelled') {
-                                    setPaymentStatus('❌ Оплата отменена');
-                                    setTimeout(() => setPaymentStatus(''), 3000);
-                                } else if (status === 'failed') {
-                                    setPaymentStatus('❌ Ошибка оплаты');
-                                    setTimeout(() => setPaymentStatus(''), 3000);
-                                }
-                            });
-                        } else {
-                            // Fallback: открываем ссылку в новом окне
-                            window.open(data.result, '_blank');
-                            setPaymentStatus('Откройте счет в Telegram. После оплаты обновите страницу.');
-                        }
-                    } else {
+                    if (!data.ok || !data.result) {
                         console.error('Failed to create invoice:', data);
-                        setPaymentStatus('❌ Ошибка создания счета');
-                        setTimeout(() => setPaymentStatus(''), 3000);
+                        setPaymentStatus('❌ Ошибка: ' + (data.description || 'Не удалось создать счет'));
+                        setTimeout(() => setPaymentStatus(''), 5000);
+                        return;
+                    }
+                    
+                    setPaymentStatus('Ожидание оплаты...');
+                    
+                    if (TelegramWebApp && TelegramWebApp.openInvoice) {
+                        // Открываем инвойс через WebApp
+                        TelegramWebApp.openInvoice(data.result, async (status) => {
+                            console.log('Invoice status:', status);
+                            
+                            if (status === 'paid') {
+                                // Начисляем звезды
+                                const nb = balance + pkg.stars;
+                                const nd = totalDeposits + pkg.stars;
+                                setBalance(nb);
+                                setTotalDeposits(nd);
+                                await db.ref(`users/${user.id}`).update({ 
+                                    balance: nb, 
+                                    totalDeposits: nd 
+                                });
+                                checkDepositTasks(nd, pkg.stars);
+                                setPaymentStatus(`✅ Зачислено ${pkg.stars} звёзд!`);
+                                setTimeout(() => setPaymentStatus(''), 3000);
+                            } else if (status === 'cancelled') {
+                                setPaymentStatus('❌ Оплата отменена');
+                                setTimeout(() => setPaymentStatus(''), 3000);
+                            } else if (status === 'failed') {
+                                setPaymentStatus('❌ Ошибка оплаты');
+                                setTimeout(() => setPaymentStatus(''), 3000);
+                            }
+                        });
+                    } else {
+                        // Fallback: открываем ссылку в браузере
+                        window.open(data.result, '_blank');
+                        setPaymentStatus('Откройте счет в Telegram. После оплаты обновите страницу.');
                     }
                 } catch (e) {
                     console.error('Payment error:', e);
                     setPaymentStatus('❌ Ошибка: ' + e.message);
-                    setTimeout(() => setPaymentStatus(''), 3000);
+                    setTimeout(() => setPaymentStatus(''), 5000);
                 }
             };
 
@@ -766,35 +774,49 @@
                             payload: payload,
                             provider_token: "", // ПУСТАЯ строка для Telegram Stars
                             currency: 'XTR',
-                            prices: [{ label: '1 билет судьбы', amount: HADES_TICKET_PRICE }]
+                            prices: [{ label: '1 билет судьбы', amount: HADES_TICKET_PRICE }],
+                            need_name: false,
+                            need_phone_number: false,
+                            need_email: false,
+                            need_shipping_address: false
                         })
                     });
                     
                     const data = await response.json();
                     
-                    if (data.ok && data.result) {
-                        setPaymentStatus('Ожидание оплаты...');
-                        
-                        if (TelegramWebApp && TelegramWebApp.openInvoice) {
-                            TelegramWebApp.openInvoice(data.result, async (status) => {
-                                if (status === 'paid') {
-                                    const nt = fateTickets + 1;
-                                    setFateTickets(nt);
-                                    await db.ref(`users/${user.id}/fateTickets`).set(nt);
-                                    setPaymentStatus('✅ Билет куплен!');
-                                    setTimeout(() => setPaymentStatus(''), 3000);
-                                } else if (status === 'cancelled') {
-                                    setPaymentStatus('❌ Отменено');
-                                    setTimeout(() => setPaymentStatus(''), 3000);
-                                }
-                            });
-                        } else {
-                            window.open(data.result, '_blank');
-                        }
+                    if (!data.ok || !data.result) {
+                        console.error('Failed to create invoice:', data);
+                        setPaymentStatus('❌ Ошибка: ' + (data.description || 'Не удалось создать счет'));
+                        setTimeout(() => setPaymentStatus(''), 5000);
+                        return;
+                    }
+                    
+                    setPaymentStatus('Ожидание оплаты...');
+                    
+                    if (TelegramWebApp && TelegramWebApp.openInvoice) {
+                        TelegramWebApp.openInvoice(data.result, async (status) => {
+                            if (status === 'paid') {
+                                const nt = fateTickets + 1;
+                                setFateTickets(nt);
+                                await db.ref(`users/${user.id}/fateTickets`).set(nt);
+                                setPaymentStatus('✅ Билет куплен!');
+                                setTimeout(() => setPaymentStatus(''), 3000);
+                            } else if (status === 'cancelled') {
+                                setPaymentStatus('❌ Отменено');
+                                setTimeout(() => setPaymentStatus(''), 3000);
+                            } else if (status === 'failed') {
+                                setPaymentStatus('❌ Ошибка оплаты');
+                                setTimeout(() => setPaymentStatus(''), 3000);
+                            }
+                        });
+                    } else {
+                        window.open(data.result, '_blank');
+                        setPaymentStatus('Откройте счет в Telegram. После оплаты обновите страницу.');
                     }
                 } catch (e) {
-                    setPaymentStatus('❌ Ошибка');
-                    setTimeout(() => setPaymentStatus(''), 3000);
+                    console.error('Payment error:', e);
+                    setPaymentStatus('❌ Ошибка: ' + e.message);
+                    setTimeout(() => setPaymentStatus(''), 5000);
                 }
             };
 
@@ -1840,12 +1862,12 @@
                                     <span className="text-yellow-400 font-bold text-sm">5 ⭐️</span>
                                 </button>
 
-                                <p className="text-xs text-gray-400 text-center mb-2">⭐️ Telegram Stars</p>
+                                <p className="text-xs text-gray-400 text-center mb-2">⭐️ Telegram Stars - Купить звезды</p>
                                 <div className="space-y-2 mb-3">
                                     {STARS_PACKAGES.map(pkg => (
-                                        <button key={pkg.stars} onClick={() => buyStars(pkg)} className="w-full glass p-3 rounded-xl flex justify-between items-center hover:bg-white/10 border border-white/10">
-                                            <span className="font-bold text-yellow-400 text-sm">+{pkg.stars} ⭐️</span>
-                                            <span className="text-gray-300 text-xs">Купить</span>
+                                        <button key={pkg.stars} onClick={() => buyStars(pkg)} className="w-full glass p-3 rounded-xl flex justify-between items-center hover:bg-white/10 border border-yellow-500/30">
+                                            <span className="font-bold text-yellow-400 text-sm">+{pkg.stars} ⭐️ на баланс</span>
+                                            <span className="text-yellow-300 text-xs font-semibold">{pkg.displayPrice}</span>
                                         </button>
                                     ))}
                                 </div>
